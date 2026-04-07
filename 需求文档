@@ -86,7 +86,7 @@ CREATE TABLE xdj_user_positions (
 
 职位必须绑定部门（你这版已经做到了）
 
-👉 否则审批流很难做
+👉 否则审批流很难做dd
 
 ✅ 2️⃣ 必须有主部门 + 主职位
 is_primary = 1
