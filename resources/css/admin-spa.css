@@ -1,0 +1,1305 @@
+/* Admin SPA (Vue2 + ElementUI) unified styles */
+
+/* Base theme attribute is set in admin/app.blade.php */
+
+.admin-shell {
+  min-height: 100vh;
+  --admin-aside-w: 220px;
+  /* 底栏：侧栏退出区与主区分页/保存条统一高度与内边距 */
+  --admin-dock-py: 12px;
+  --admin-dock-px: 16px;
+  --admin-dock-strip-min-h: 52px;
+  --admin-header-h: 56px;
+}
+.admin-shell.admin-aside--collapsed {
+  --admin-aside-w: 64px;
+}
+
+/* 侧栏 fixed 后主列占位（aside 脱离 flex 流，需限制宽度避免横向滚动） */
+.admin-shell > .el-container {
+  margin-left: var(--admin-aside-w);
+  width: calc(100% - var(--admin-aside-w));
+  max-width: calc(100% - var(--admin-aside-w));
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 100vh;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+/* fixed 顶栏已脱离文档流，勿再对 el-header 设 height:0，否则会裁切面包屑与按钮 */
+
+.admin-shell.admin-theme-light {
+  background: #f5f7fa;
+}
+.admin-shell.admin-theme-dark {
+  background: #0b1220;
+}
+
+/* Aside：整列钉在视口左侧，内部上品牌 / 中菜单滚动 / 下退出 */
+.admin-aside {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 97;
+  box-sizing: border-box;
+  width: var(--admin-aside-w) !important;
+  background: #ffffff;
+  color: #111827;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.admin-shell.admin-theme-dark .admin-aside {
+  background: #0a1020;
+  color: #e5e7eb;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.admin-brand {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--admin-header-h);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-weight: 700;
+  color: #111827;
+  background: inherit;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+}
+.admin-shell.admin-theme-dark .admin-brand {
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+.admin-menu {
+  border-right: none;
+  background: transparent;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.admin-menu .el-menu-item,
+.admin-menu .el-submenu__title {
+  color: #1f2937;
+}
+.admin-shell.admin-theme-dark .admin-menu .el-menu-item,
+.admin-shell.admin-theme-dark .admin-menu .el-submenu__title {
+  color: rgba(255, 255, 255, 0.82);
+}
+.admin-menu .el-menu-item:hover,
+.admin-menu .el-submenu__title:hover {
+  background: rgba(17, 24, 39, 0.04);
+}
+.admin-shell.admin-theme-dark .admin-menu .el-menu-item:hover,
+.admin-shell.admin-theme-dark .admin-menu .el-submenu__title:hover {
+  background: rgba(59, 130, 246, 0.14);
+}
+.admin-menu .el-menu-item.is-active {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+.admin-shell.admin-theme-dark .admin-menu .el-menu-item.is-active {
+  background: rgba(59, 130, 246, 0.18);
+  color: #fff;
+}
+.admin-menu .el-submenu .el-menu {
+  background: #f9fafb;
+}
+.admin-shell.admin-theme-dark .admin-menu .el-submenu .el-menu {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* 侧栏折叠：有子菜单时标题自定义了 .admin-submenu-title，需单独隐藏文案，否则会露出「管」等字 */
+.admin-menu.el-menu--collapse {
+  width: 100% !important;
+}
+.admin-menu.el-menu--collapse > .el-menu-item {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.admin-menu.el-menu--collapse > .el-menu-item > span {
+  display: none !important;
+}
+.admin-menu.el-menu--collapse .el-submenu__title {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+.admin-menu.el-menu--collapse .el-submenu__title .admin-submenu-title {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  overflow: hidden;
+}
+.admin-menu.el-menu--collapse .el-submenu__title .admin-submenu-title > span {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.admin-menu.el-menu--collapse .el-submenu__icon-arrow {
+  display: none !important;
+}
+
+.admin-aside__footer {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--admin-dock-strip-min-h);
+  padding: var(--admin-dock-py) var(--admin-dock-px);
+  display: flex;
+  align-items: center;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+  box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.06);
+}
+.admin-shell.admin-aside--collapsed .admin-aside__footer {
+  padding-left: 8px;
+  padding-right: 8px;
+  justify-content: center;
+}
+.admin-shell.admin-theme-dark .admin-aside__footer {
+  border-top-color: rgba(255, 255, 255, 0.08);
+  background: #0f172a;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+}
+.admin-aside__logout {
+  width: 100%;
+  text-align: left;
+  padding: 9px 8px;
+  border-radius: 6px;
+  color: #111827;
+}
+.admin-shell.admin-aside--collapsed .admin-aside__logout {
+  width: auto;
+  text-align: center;
+  padding: 9px 8px;
+}
+.admin-shell.admin-theme-dark .admin-aside__logout {
+  color: rgba(255, 255, 255, 0.82);
+}
+.admin-aside__logout:hover {
+  background: rgba(17, 24, 39, 0.04);
+}
+.admin-shell.admin-theme-dark .admin-aside__logout:hover {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+/* Header：固定在视口顶部，与侧栏宽度对齐，滚动主区时始终可见 */
+.admin-header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: var(--admin-aside-w);
+  z-index: 98;
+  box-sizing: border-box;
+  height: var(--admin-header-h);
+  min-height: var(--admin-header-h);
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+}
+.admin-shell.admin-theme-dark .admin-header {
+  background: #0f172a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+.admin-header__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.admin-header__collapse {
+  padding: 0 6px;
+}
+.admin-header__title {
+  font-weight: 600;
+  color: #111827;
+}
+.admin-shell.admin-theme-dark .admin-header__title {
+  color: #e5e7eb;
+}
+.admin-header__title .el-breadcrumb__inner,
+.admin-header__title .el-breadcrumb__separator {
+  font-weight: 600;
+  color: inherit;
+}
+.admin-header__right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.admin-header__time {
+  font-size: 12px;
+  color: #606266;
+}
+.admin-shell.admin-theme-dark .admin-header__time {
+  color: rgba(255, 255, 255, 0.75);
+}
+.admin-header__me {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.admin-shell.admin-theme-dark .admin-header__me {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* Theme toggle: larger hit area and icon */
+.admin-header__theme.el-button {
+  padding: 8px 14px;
+  min-width: 40px;
+  min-height: 36px;
+  font-size: 20px;
+  border-radius: 10px;
+}
+.admin-header__theme.el-button i {
+  font-size: 22px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* Main：覆盖 Element .el-main 默认 overflow:auto（否则滚动在 main 内，sticky 失效且顶栏易双倍留白） */
+.admin-shell > .el-container.is-vertical > .el-main.admin-main {
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+/* Main：为固定顶栏留出高度（fixed 不占据文档流） */
+.admin-main {
+  margin-top: var(--admin-header-h);
+  padding: 16px;
+  min-width: 0;
+}
+.admin-content {
+  min-height: calc(100vh - var(--admin-header-h) - 32px);
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 列表/树页：首块（搜索、筛选、工具按钮）吸顶（整页滚动时相对视口，贴在顶栏下） */
+.admin-page-filters {
+  position: sticky;
+  top: var(--admin-header-h);
+  z-index: 90;
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+.admin-shell.admin-theme-dark .admin-page-filters.el-card {
+  background: #0f172a;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+
+/* 列表表格：左 2 / 右 2 固定列由列上 fixed 控制；中间列 min-width 撑开触发横向滚动 */
+.admin-data-table {
+  width: 100%;
+}
+
+/* Common page layout helpers */
+.admin-card__header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.admin-form-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 弹窗「取消 / 保存」：底部右侧，主操作在最右 */
+.admin-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 非弹窗表单页：操作区贴在表单下方右侧 */
+.admin-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+.admin-theme-dark .admin-form-footer {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 钉在视口底部（主内容区），与侧栏底栏同高、同内边距 */
+.admin-main-dock {
+  position: fixed;
+  z-index: 99;
+  bottom: 0;
+  right: 0;
+  left: var(--admin-aside-w);
+  margin: 0;
+  min-height: var(--admin-dock-strip-min-h);
+  padding: var(--admin-dock-py) var(--admin-dock-px);
+  border-top: 1px solid #ebeef5;
+  background: #ffffff;
+  box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.06);
+  box-sizing: border-box;
+}
+.admin-shell.admin-theme-dark .admin-main-dock {
+  border-top-color: rgba(255, 255, 255, 0.08);
+  background: #0f172a;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.admin-form-footer--fixed {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-content:has(.admin-main-dock) {
+  padding-bottom: calc(var(--admin-dock-strip-min-h) + 2 * var(--admin-dock-py) + 20px);
+}
+
+.admin-form-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.admin-theme-dark .admin-form-hint {
+  color: #94a3b8;
+}
+
+/* 角色 — 分配权限（大弹窗 + 树区域独立滚动，与暗色主题一致） */
+.admin-role-perm-dialog.el-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+  margin-bottom: 0;
+}
+.admin-role-perm-dialog .el-dialog__header {
+  flex-shrink: 0;
+  padding: 16px 20px 10px;
+}
+.admin-role-perm-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 20px 16px;
+}
+.admin-role-perm-dialog .el-dialog__footer {
+  flex-shrink: 0;
+  padding: 10px 20px 16px;
+}
+@media (max-width: 900px) {
+  .admin-role-perm-dialog.el-dialog {
+    width: 94% !important;
+  }
+}
+.admin-role-perm-dialog__body {
+  min-height: min(62vh, 560px);
+  height: min(62vh, 560px);
+  display: flex;
+  flex-direction: column;
+}
+.admin-role-perm-readonly-hint {
+  flex-shrink: 0;
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64748b;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-readonly-hint,
+html[data-admin-theme='dark'] .admin-role-perm-readonly-hint {
+  color: #94a3b8;
+}
+.admin-role-perm-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+}
+.admin-role-perm-tree .el-tree {
+  background: transparent;
+  min-width: min-content;
+}
+.admin-role-perm-tree .el-tree-node__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.admin-role-perm-tree .el-tree-node__content {
+  width: 100%;
+  box-sizing: border-box;
+  height: auto !important;
+  min-height: 36px;
+  padding: 6px 8px;
+  margin: 1px 0;
+  border-radius: 6px;
+  align-items: flex-start;
+}
+.admin-role-perm-tree .el-tree-node__content:hover {
+  background-color: rgba(17, 24, 39, 0.06) !important;
+}
+/* 已勾选 / 半选（父级）行背景，便于扫读 */
+.admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-checked),
+.admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-indeterminate) {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+.admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-checked):hover,
+.admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-indeterminate):hover {
+  background-color: rgba(37, 99, 235, 0.16) !important;
+}
+.admin-role-perm-tree .el-checkbox {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-tree,
+html[data-admin-theme='dark'] .admin-role-perm-tree {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node__content:hover,
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node__content:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-checked),
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-checked),
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-indeterminate),
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-indeterminate) {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-checked):hover,
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-checked):hover,
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-indeterminate):hover,
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node__content:has(.el-checkbox.is-indeterminate):hover {
+  background-color: rgba(59, 130, 246, 0.28) !important;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node:focus > .el-tree-node__content,
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node:focus > .el-tree-node__content {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node:focus > .el-tree-node__content:has(.el-checkbox.is-checked),
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node:focus > .el-tree-node__content:has(.el-checkbox.is-checked),
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node:focus > .el-tree-node__content:has(.el-checkbox.is-indeterminate),
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node:focus > .el-tree-node__content:has(.el-checkbox.is-indeterminate) {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-tree,
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree-node__label,
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-tree,
+html[data-admin-theme='dark'] .admin-role-perm-tree,
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree-node__label,
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-tree {
+  color: rgba(255, 255, 255, 0.9);
+}
+.admin-shell.admin-theme-dark .admin-role-perm-tree .el-checkbox__inner,
+html[data-admin-theme='dark'] .admin-role-perm-tree .el-checkbox__inner {
+  background-color: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.admin-role-perm-empty {
+  font-size: 13px;
+  color: #909399;
+  padding: 24px 12px;
+  text-align: center;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-empty,
+html[data-admin-theme='dark'] .admin-role-perm-empty {
+  color: #94a3b8;
+}
+.admin-role-perm-node {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.admin-role-perm-node__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.admin-role-perm-node__name {
+  font-weight: 500;
+  color: #111827;
+  word-break: break-word;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-node__name {
+  color: rgba(255, 255, 255, 0.92);
+}
+.admin-role-perm-node__code {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  color: #64748b;
+  background: rgba(100, 116, 139, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+.admin-shell.admin-theme-dark .admin-role-perm-node__name,
+html[data-admin-theme='dark'] .admin-role-perm-node__name {
+  color: rgba(255, 255, 255, 0.92);
+}
+.admin-shell.admin-theme-dark .admin-role-perm-node__code,
+html[data-admin-theme='dark'] .admin-role-perm-node__code {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.08);
+}
+.admin-role-perm-node__meta {
+  flex: 0 0 52px;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1px;
+}
+.admin-role-perm-node__tag {
+  margin: 0;
+}
+
+.admin-role-system-hint {
+  font-size: 12px;
+  color: #909399;
+  cursor: default;
+}
+.admin-shell.admin-theme-dark .admin-role-system-hint,
+html[data-admin-theme='dark'] .admin-role-system-hint {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.admin-flex-spacer {
+  flex: 1;
+}
+/* Transparent host so recursive menu nodes don't break el-menu direct-child rules */
+.admin-menu-nodes-host {
+  display: contents;
+}
+
+/* 有子级的父菜单标题：点击时跳转 path（与 el-submenu 展开并存） */
+.admin-submenu-title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* 菜单管理树表：有子级时点击名称也可展开/收起 */
+.admin-menu-tree-name--expandable {
+  cursor: pointer;
+  user-select: none;
+}
+.admin-menu-tree-name--expandable:hover {
+  color: #409eff;
+}
+.admin-shell.admin-theme-dark .admin-menu-tree-name--expandable:hover {
+  color: #60a5fa;
+}
+
+/* 部门与职务：职务名称 + 下方标识码；深色下避免灰字糊在背景上 */
+.admin-shell.admin-theme-dark .admin-dept-unified-position-name,
+html[data-admin-theme='dark'] .admin-dept-unified-position-name {
+  color: rgba(255, 255, 255, 0.86);
+}
+.admin-shell.admin-theme-dark .admin-dept-pos-name-stack__code,
+html[data-admin-theme='dark'] .admin-dept-pos-name-stack__code {
+  color: rgba(148, 163, 184, 0.92);
+}
+
+/* 新增职务弹窗：已有职务列表（深色） */
+.admin-shell.admin-theme-dark .admin-pos-existing-list,
+html[data-admin-theme='dark'] .admin-pos-existing-list {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.65);
+}
+.admin-shell.admin-theme-dark .admin-pos-existing-item,
+html[data-admin-theme='dark'] .admin-pos-existing-item {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+.admin-shell.admin-theme-dark .admin-pos-existing-name,
+html[data-admin-theme='dark'] .admin-pos-existing-name {
+  color: rgba(255, 255, 255, 0.9);
+}
+.admin-shell.admin-theme-dark .admin-pos-existing-code,
+html[data-admin-theme='dark'] .admin-pos-existing-code {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(226, 232, 240, 0.92);
+}
+.admin-shell.admin-theme-dark .admin-pos-existing-meta,
+html[data-admin-theme='dark'] .admin-pos-existing-meta {
+  color: rgba(148, 163, 184, 0.95);
+}
+
+/* 部门/职务列表：操作列横排 + 去掉 Element 默认按钮外边距，避免删除钮单独换行成「灰块」 */
+.admin-departments-page .admin-dept-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.admin-departments-page .admin-dept-actions .el-button {
+  margin: 0 !important;
+}
+.admin-departments-page .admin-data-table.el-table .el-table__body td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.admin-departments-page .admin-data-table.el-table .el-table__body .cell {
+  line-height: 1.45;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-actions .el-button--danger,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-actions .el-button--danger {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-actions .el-button--danger:hover,
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-actions .el-button--danger:focus,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-actions .el-button--danger:hover,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-actions .el-button--danger:focus {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.admin-menu-icon-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.admin-menu-icon-cell i {
+  font-size: 18px;
+  color: #606266;
+  line-height: 1;
+  cursor: default;
+}
+.admin-shell.admin-theme-dark .admin-menu-icon-cell i {
+  color: rgba(255, 255, 255, 0.82);
+}
+.admin-menu-icon-empty {
+  color: #c0c4cc;
+  font-size: 14px;
+}
+.admin-shell.admin-theme-dark .admin-menu-icon-empty {
+  color: rgba(255, 255, 255, 0.35);
+}
+.admin-w-full {
+  width: 100%;
+}
+.admin-text-danger {
+  color: #f56c6c;
+}
+.admin-shell.admin-theme-dark .admin-text-danger {
+  color: #f87171;
+}
+.admin-w-110 { width: 110px; }
+.admin-w-120 { width: 120px; }
+.admin-w-140 { width: 140px; }
+.admin-w-160 { width: 160px; }
+.admin-w-200 { width: 200px; }
+.admin-w-240 { width: 240px; }
+.admin-w-260 { width: 260px; }
+.admin-mb-12 { margin-bottom: 12px; }
+.admin-ml-6 { margin-left: 6px; }
+.admin-ml-8 { margin-left: 8px; }
+.admin-mr-6 { margin-right: 6px; }
+
+.admin-pager-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.admin-pager-row.admin-main-dock {
+  margin-top: 0;
+}
+
+.admin-status-switch {
+  transform: scale(0.95);
+  transform-origin: left center;
+}
+
+.admin-menu-sort-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  font-size: 0;
+  line-height: 0;
+}
+.admin-menu-sort-cell .admin-menu-sort-input {
+  font-size: 12px;
+  line-height: normal;
+}
+
+.admin-menu-sort-input {
+  width: 88px;
+}
+.admin-menu-sort-input.el-input--mini .el-input__inner {
+  text-align: left;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.admin-tag--muted {
+  opacity: 0.7;
+}
+.admin-home__me {
+  font-size: 14px;
+}
+.admin-home__line {
+  margin: 0 0 12px;
+}
+.admin-home__roles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  line-height: 1.5;
+}
+.admin-home__roles-label {
+  color: #606266;
+}
+.admin-shell.admin-theme-dark .admin-home__roles-label {
+  color: rgba(255, 255, 255, 0.65);
+}
+.admin-home__role-tag {
+  margin: 0;
+}
+.admin-home__roles-none {
+  margin: 0;
+  color: #606266;
+}
+.admin-shell.admin-theme-dark .admin-home__roles-none {
+  color: rgba(255, 255, 255, 0.65);
+}
+.admin-home__loading {
+  color: #909399;
+}
+
+/* Dark theme: content components */
+.admin-shell.admin-theme-dark .el-card {
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+}
+.admin-shell.admin-theme-dark .el-card__header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+}
+.admin-shell.admin-theme-dark .el-table,
+.admin-shell.admin-theme-dark .el-table__expanded-cell {
+  background: #0f172a;
+  color: rgba(255, 255, 255, 0.88);
+}
+.admin-shell.admin-theme-dark .el-table th,
+.admin-shell.admin-theme-dark .el-table tr {
+  background: #0f172a;
+}
+.admin-shell.admin-theme-dark .el-table__fixed,
+.admin-shell.admin-theme-dark .el-table__fixed-right,
+.admin-shell.admin-theme-dark .el-table__fixed-header-wrapper,
+.admin-shell.admin-theme-dark .el-table__fixed-body-wrapper,
+.admin-shell.admin-theme-dark .el-table__fixed-right-patch {
+  background: #0f172a;
+}
+.admin-shell.admin-theme-dark .el-table__fixed::before,
+.admin-shell.admin-theme-dark .el-table__fixed-right::before {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+.admin-shell.admin-theme-dark .el-table__fixed-right-patch {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+.admin-shell.admin-theme-dark .el-table__fixed {
+  box-shadow: 2px 0 0 rgba(255, 255, 255, 0.06);
+}
+.admin-shell.admin-theme-dark .el-table__fixed-right {
+  box-shadow: -2px 0 0 rgba(255, 255, 255, 0.06);
+}
+.admin-shell.admin-theme-dark .el-table td,
+.admin-shell.admin-theme-dark .el-table th.is-leaf {
+  border-bottom-color: rgba(255, 255, 255, 0.14);
+}
+.admin-shell.admin-theme-dark .el-table::before {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+.admin-shell.admin-theme-dark .el-table th,
+.admin-shell.admin-theme-dark .el-table__fixed-right-patch,
+.admin-shell.admin-theme-dark .el-table__fixed::before,
+.admin-shell.admin-theme-dark .el-table__fixed-right::before {
+  border-bottom-color: rgba(255, 255, 255, 0.14);
+}
+.admin-shell.admin-theme-dark .el-table--enable-row-hover .el-table__body tr:hover > td,
+.admin-shell.admin-theme-dark .el-table__body tr.hover-row > td {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+.admin-shell.admin-theme-dark .el-table--enable-row-hover .el-table__fixed-body-wrapper tr:hover > td,
+.admin-shell.admin-theme-dark .el-table__fixed-body-wrapper tr.hover-row > td,
+.admin-shell.admin-theme-dark .el-table--enable-row-hover .el-table__fixed-right .el-table__fixed-body-wrapper tr:hover > td,
+.admin-shell.admin-theme-dark .el-table__fixed-right .el-table__fixed-body-wrapper tr.hover-row > td {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+.admin-shell.admin-theme-dark .el-table__body tr.current-row > td {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+.admin-shell.admin-theme-dark .el-table__fixed-body-wrapper tr.current-row > td,
+.admin-shell.admin-theme-dark .el-table__fixed-right .el-table__fixed-body-wrapper tr.current-row > td {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+.admin-shell.admin-theme-dark .el-table__empty-block {
+  background: #0f172a;
+}
+.admin-shell.admin-theme-dark .el-loading-mask {
+  background-color: rgba(11, 18, 32, 0.55);
+}
+.admin-shell.admin-theme-dark .el-loading-spinner .el-loading-text,
+.admin-shell.admin-theme-dark .el-loading-spinner i {
+  color: rgba(255, 255, 255, 0.75);
+}
+.admin-shell.admin-theme-dark .el-input__inner,
+.admin-shell.admin-theme-dark .el-textarea__inner {
+  background: #0b1220;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.88);
+}
+.admin-shell.admin-theme-dark .el-input__inner::placeholder,
+.admin-shell.admin-theme-dark .el-textarea__inner::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+.admin-shell.admin-theme-dark .el-select .el-input__inner {
+  background: #0b1220;
+}
+
+.admin-shell.admin-theme-dark .el-button {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.admin-shell.admin-theme-dark .el-button--default {
+  background: #0b1220;
+  color: rgba(255, 255, 255, 0.88);
+}
+.admin-shell.admin-theme-dark .el-button--default:hover,
+.admin-shell.admin-theme-dark .el-button--default:focus {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.admin-shell.admin-theme-dark .el-button--text {
+  color: rgba(255, 255, 255, 0.82);
+}
+.admin-shell.admin-theme-dark .el-button--text:hover,
+.admin-shell.admin-theme-dark .el-button--text:focus {
+  color: #fff;
+}
+.admin-shell.admin-theme-dark .el-dialog {
+  background: #0f172a;
+  color: rgba(255, 255, 255, 0.88);
+}
+.admin-shell.admin-theme-dark .el-dialog__title {
+  color: rgba(255, 255, 255, 0.88);
+}
+.el-dialog__header {
+  text-align: center;
+}
+.el-dialog__headerbtn {
+  right: 14px;
+}
+.admin-shell.admin-theme-dark .el-dialog__headerbtn .el-dialog__close {
+  color: rgba(255, 255, 255, 0.75);
+}
+.admin-shell.admin-theme-dark .el-pagination {
+  color: rgba(255, 255, 255, 0.75);
+}
+.admin-shell.admin-theme-dark .el-pagination .btn-prev,
+.admin-shell.admin-theme-dark .el-pagination .btn-next,
+.admin-shell.admin-theme-dark .el-pager li {
+  background: #0f172a;
+  color: rgba(255, 255, 255, 0.75);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.admin-shell.admin-theme-dark .el-pager li.active {
+  background: rgba(59, 130, 246, 0.25);
+  color: #fff;
+}
+.admin-shell.admin-theme-dark .el-breadcrumb__inner,
+.admin-shell.admin-theme-dark .el-breadcrumb__separator {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* Global poppers/panels appended to <body> */
+html[data-admin-theme='dark'] {
+  scrollbar-color: rgba(255, 255, 255, 0.28) rgba(255, 255, 255, 0.06);
+}
+html[data-admin-theme='dark'] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html[data-admin-theme='dark'] ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+}
+html[data-admin-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.06);
+}
+html[data-admin-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+html[data-admin-theme='dark'] .el-table__body-wrapper::-webkit-scrollbar-track,
+html[data-admin-theme='dark'] .el-table__body-wrapper::-webkit-scrollbar-track-piece {
+  background: rgba(255, 255, 255, 0.06);
+}
+html[data-admin-theme='dark'] .el-table__body-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.06);
+}
+html[data-admin-theme='dark'] .el-table__body-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+html[data-admin-theme='dark'] .el-select-dropdown {
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-select-dropdown__item {
+  color: rgba(255, 255, 255, 0.82);
+}
+html[data-admin-theme='dark'] .el-select-dropdown__item.hover,
+html[data-admin-theme='dark'] .el-select-dropdown__item:hover {
+  background: rgba(59, 130, 246, 0.14);
+  color: #fff;
+}
+html[data-admin-theme='dark'] .el-select-dropdown__item.selected {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+  color: #bfdbfe;
+  font-weight: 500;
+}
+html[data-admin-theme='dark'] .el-select-dropdown__item.selected.hover,
+html[data-admin-theme='dark'] .el-select-dropdown__item.selected:hover {
+  background-color: rgba(59, 130, 246, 0.32) !important;
+  color: #fff;
+}
+
+/* Popper arrow color (fix the small white triangle) */
+html[data-admin-theme='dark'] .el-popper[x-placement^='bottom'] .popper__arrow {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-popper[x-placement^='bottom'] .popper__arrow::after {
+  border-bottom-color: #0f172a;
+}
+html[data-admin-theme='dark'] .el-popper[x-placement^='top'] .popper__arrow {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-popper[x-placement^='top'] .popper__arrow::after {
+  border-top-color: #0f172a;
+}
+
+html[data-admin-theme='dark'] .el-picker-panel,
+html[data-admin-theme='dark'] .el-picker-panel__body,
+html[data-admin-theme='dark'] .el-picker-panel__body-wrapper,
+html[data-admin-theme='dark'] .el-picker-panel__content {
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.82);
+}
+html[data-admin-theme='dark'] .el-picker-panel__footer {
+  background: #0f172a;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-picker-panel__footer .el-button--default {
+  background: #0b1220;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.88);
+}
+html[data-admin-theme='dark'] .el-picker-panel__footer .el-button--default:hover,
+html[data-admin-theme='dark'] .el-picker-panel__footer .el-button--default:focus {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+html[data-admin-theme='dark'] .el-picker-panel__icon-btn,
+html[data-admin-theme='dark'] .el-date-picker__header-label {
+  color: rgba(255, 255, 255, 0.82);
+}
+html[data-admin-theme='dark'] .el-date-picker__time-header {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-date-picker__time-header .el-input__inner {
+  background: #0b1220;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.88);
+}
+html[data-admin-theme='dark'] .el-date-picker__time-header .el-input__inner::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+html[data-admin-theme='dark'] .el-date-table {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-date-table th {
+  color: rgba(255, 255, 255, 0.65);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-date-table td {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+html[data-admin-theme='dark'] .el-date-table td .cell {
+  color: rgba(255, 255, 255, 0.82);
+}
+html[data-admin-theme='dark'] .el-date-table td.disabled .cell,
+html[data-admin-theme='dark'] .el-date-table td.next-month,
+html[data-admin-theme='dark'] .el-date-table td.prev-month {
+  color: rgba(255, 255, 255, 0.28);
+}
+html[data-admin-theme='dark'] .el-date-table td.available:hover .cell {
+  background: rgba(59, 130, 246, 0.14);
+  color: #fff;
+}
+html[data-admin-theme='dark'] .el-date-table td.current:not(.disabled) .cell {
+  background: rgba(59, 130, 246, 0.25);
+  color: #fff;
+}
+html[data-admin-theme='dark'] .el-month-table td .cell,
+html[data-admin-theme='dark'] .el-year-table td .cell {
+  color: rgba(255, 255, 255, 0.82);
+}
+html[data-admin-theme='dark'] .el-month-table td .cell:hover,
+html[data-admin-theme='dark'] .el-year-table td .cell:hover {
+  background: rgba(59, 130, 246, 0.14);
+  color: #fff;
+}
+html[data-admin-theme='dark'] .el-time-panel {
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-time-panel__footer {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+html[data-admin-theme='dark'] .el-time-spinner__wrapper {
+  background: #0f172a;
+}
+html[data-admin-theme='dark'] .el-time-spinner__item {
+  color: rgba(255, 255, 255, 0.65);
+}
+html[data-admin-theme='dark'] .el-time-spinner__item.active {
+  color: #fff;
+}
+html[data-admin-theme='dark'] .el-time-spinner__item:hover:not(.disabled):not(.active) {
+  background: rgba(59, 130, 246, 0.14);
+  color: #fff;
+}
+
+/* 用户列表：账号/角色分列、标签换行、操作列不换行 */
+.admin-users-page .admin-users-table .el-table__body td {
+  vertical-align: middle;
+}
+.admin-users-page .admin-user-account-cell {
+  font-weight: 500;
+}
+.admin-users-page .admin-user-roles-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  line-height: 1.35;
+  min-height: 22px;
+}
+.admin-users-page .admin-user-role-tag {
+  margin: 0;
+  max-width: 100%;
+}
+.admin-users-page td.admin-users-col-actions .cell {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0;
+}
+.admin-users-page .admin-users-op-empty {
+  color: rgba(128, 128, 128, 0.85);
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-users-op-empty {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.admin-users-create-role-hint {
+  margin: -4px 0 0 90px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+}
+.admin-shell.admin-theme-dark .admin-users-create-role-hint,
+html[data-admin-theme='dark'] .admin-users-create-role-hint {
+  color: rgba(148, 163, 184, 0.95);
+}
+
+/* 分配角色弹窗：说明文案、多选标签、下拉（popper 挂 body，用 html[data-admin-theme]） */
+.admin-users-role-dialog.el-dialog {
+  border-radius: 10px;
+}
+.admin-users-role-dialog .el-dialog__body {
+  padding: 12px 22px 6px;
+}
+.admin-users-role-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+}
+.admin-shell.admin-theme-dark .admin-users-role-hint,
+html[data-admin-theme='dark'] .admin-users-role-hint {
+  color: rgba(148, 163, 184, 0.95);
+}
+.admin-users-role-form-item {
+  margin-bottom: 0;
+}
+.admin-shell.admin-theme-light .admin-users-role-dialog .el-select .el-tag {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #047857;
+}
+.admin-shell.admin-theme-dark .admin-users-role-dialog .el-select .el-tag,
+html[data-admin-theme='dark'] .admin-users-role-dialog .el-select .el-tag {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #86efac;
+}
+.admin-shell.admin-theme-dark .admin-users-role-dialog .el-select .el-tag .el-tag__close,
+html[data-admin-theme='dark'] .admin-users-role-dialog .el-select .el-tag .el-tag__close {
+  color: rgba(255, 255, 255, 0.72);
+}
+.admin-shell.admin-theme-dark .admin-users-role-dialog .el-select .el-tag .el-tag__close:hover,
+html[data-admin-theme='dark'] .admin-users-role-dialog .el-select .el-tag .el-tag__close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+/* 分配角色：选项多时下拉勿过高，避免盖住弹窗底部按钮（popper 挂在 body） */
+.admin-users-role-select-dropdown.el-select-dropdown .el-select-dropdown__wrap {
+  max-height: min(38vh, 228px) !important;
+}
+html[data-admin-theme='dark'] .admin-users-role-select-dropdown.el-select-dropdown {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+html[data-admin-theme='dark'] .admin-users-role-select-dropdown .el-select-dropdown__empty {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 报销模板弹窗：审批节点卡片（挂 body 时与深色主题） */
+.admin-expense-template-dialog.el-dialog .el-dialog__body {
+  padding: 12px 22px 8px;
+  max-height: min(72vh, 640px);
+  overflow-y: auto;
+}
+.admin-shell.admin-theme-dark .admin-expense-template-nodes-hint,
+html[data-admin-theme='dark'] .admin-expense-template-nodes-hint {
+  color: rgba(148, 163, 184, 0.95);
+}
+.admin-shell.admin-theme-dark .admin-expense-template-nodes-empty,
+html[data-admin-theme='dark'] .admin-expense-template-nodes-empty {
+  color: rgba(148, 163, 184, 0.75);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.admin-shell.admin-theme-dark .admin-expense-template-node-card,
+html[data-admin-theme='dark'] .admin-expense-template-node-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.5);
+}
+.admin-shell.admin-theme-dark .admin-expense-template-node-card__step,
+html[data-admin-theme='dark'] .admin-expense-template-node-card__step {
+  color: rgba(255, 255, 255, 0.9);
+}
+html[data-admin-theme='dark'] .admin-users-role-select-dropdown .el-select-dropdown__item.selected::after {
+  color: #93c5fd;
+}
+
+/* 分配部门/职务：与「分配角色」共用弹窗/标签/下拉样式；双排表单项留间距 */
+.admin-users-org-dialog .admin-users-role-form-item:not(:last-child) {
+  margin-bottom: 14px;
+}
+
+/* 用户列表「部门/职务」列：深色下标签与说明色与整站一致 */
+.admin-shell.admin-theme-dark .admin-users-page .admin-user-org-k,
+html[data-admin-theme='dark'] .admin-users-page .admin-user-org-k {
+  color: rgba(148, 163, 184, 0.95);
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-user-org-cell .el-tag--info,
+html[data-admin-theme='dark'] .admin-users-page .admin-user-org-cell .el-tag--info {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(96, 165, 250, 0.45);
+  color: #bfdbfe;
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-user-org-cell .el-tag--info .el-tag__close,
+html[data-admin-theme='dark'] .admin-users-page .admin-user-org-cell .el-tag--info .el-tag__close {
+  color: rgba(255, 255, 255, 0.7);
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-user-org-cell .el-tag--info .el-tag__close:hover,
+html[data-admin-theme='dark'] .admin-users-page .admin-user-org-cell .el-tag--info .el-tag__close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+/* 职务标签（默认色）：深色下改为柔和青绿，与截图多选标签层次接近 */
+.admin-shell.admin-theme-dark .admin-users-page .admin-user-org-cell .el-tag:not(.el-tag--info),
+html[data-admin-theme='dark'] .admin-users-page .admin-user-org-cell .el-tag:not(.el-tag--info) {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #bbf7d0;
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-user-org-cell .el-tag:not(.el-tag--info) .el-tag__close,
+html[data-admin-theme='dark'] .admin-users-page .admin-user-org-cell .el-tag:not(.el-tag--info) .el-tag__close {
+  color: rgba(255, 255, 255, 0.72);
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-user-org-cell .el-tag:not(.el-tag--info) .el-tag__close:hover,
+html[data-admin-theme='dark'] .admin-users-page .admin-user-org-cell .el-tag:not(.el-tag--info) .el-tag__close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}

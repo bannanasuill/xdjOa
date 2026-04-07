@@ -1,0 +1,92 @@
+✅ 一、设计目标
+✅ 一个用户多个部门
+✅ 一个用户多个职位
+✅ 职位归属部门（关键）
+✅ 支持主部门 / 主职位
+✅ 支持审批流（按部门 / 职位找人）
+
+DROP TABLE IF EXISTS xdj_departments;
+
+CREATE TABLE xdj_departments (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '部门ID',
+    name VARCHAR(100) NOT NULL COMMENT '部门名称',
+
+    parent_id BIGINT DEFAULT 0 COMMENT '父部门ID',
+    leader_id BIGINT COMMENT '负责人ID',
+
+    level INT DEFAULT 1 COMMENT '层级',
+    path VARCHAR(255) COMMENT '层级路径（如 1/2/3）',
+
+    status TINYINT DEFAULT 1 COMMENT '状态：1启用 0禁用',
+    sort INT DEFAULT 0 COMMENT '排序',
+
+    created_at INT(11) UNSIGNED COMMENT '创建时间',
+    updated_at INT(11) UNSIGNED COMMENT '更新时间',
+
+    INDEX idx_parent (parent_id),
+    INDEX idx_leader (leader_id)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='部门表';
+
+DROP TABLE IF EXISTS xdj_positions;
+
+CREATE TABLE xdj_positions (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '职位ID',
+    name VARCHAR(100) NOT NULL COMMENT '职位名称',
+    code VARCHAR(50) NOT NULL COMMENT '职位标识',
+
+    dept_id BIGINT NOT NULL COMMENT '所属部门ID',
+
+    level INT DEFAULT 1 COMMENT '职级（可用于审批）',
+    status TINYINT DEFAULT 1 COMMENT '状态',
+
+    created_at INT(11) UNSIGNED COMMENT '创建时间',
+    updated_at INT(11) UNSIGNED COMMENT '更新时间',
+
+    UNIQUE KEY uk_code (code),
+    INDEX idx_dept (dept_id)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='职位表';
+
+DROP TABLE IF EXISTS xdj_user_departments;
+
+CREATE TABLE xdj_user_departments (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+
+    user_id BIGINT NOT NULL COMMENT '用户ID',
+    dept_id BIGINT NOT NULL COMMENT '部门ID',
+
+    is_primary TINYINT DEFAULT 0 COMMENT '是否主部门',
+
+    created_at INT(11) UNSIGNED COMMENT '创建时间',
+
+    UNIQUE KEY uk_user_dept (user_id, dept_id),
+    INDEX idx_user (user_id),
+    INDEX idx_dept (dept_id)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户-部门关系表';
+
+DROP TABLE IF EXISTS xdj_user_positions;
+
+CREATE TABLE xdj_user_positions (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+
+    user_id BIGINT NOT NULL COMMENT '用户ID',
+    position_id BIGINT NOT NULL COMMENT '职位ID',
+
+    is_primary TINYINT DEFAULT 0 COMMENT '是否主职位',
+
+    created_at INT(11) UNSIGNED COMMENT '创建时间',
+
+    UNIQUE KEY uk_user_position (user_id, position_id),
+    INDEX idx_user (user_id),
+    INDEX idx_position (position_id)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户-职位关系表';
+
+职位必须绑定部门（你这版已经做到了）
+
+👉 否则审批流很难做
+
+✅ 2️⃣ 必须有主部门 + 主职位
+is_primary = 1
