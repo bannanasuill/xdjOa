@@ -30,5 +30,6 @@ Route::middleware('auth:sanctum')->prefix('presence')->group(function () {
     Route::post('/arrival', [PresenceController::class, 'arrival']);
     Route::post('/outing/start', [PresenceController::class, 'outingStart']);
     Route::post('/outing/end', [PresenceController::class, 'outingEnd']);
+    Route::post('/offwork', [PresenceController::class, 'offwork']);
     Route::get('/today', [PresenceController::class, 'today']);
 });

@@ -184,6 +184,76 @@ class PresenceController extends Controller
         ]);
     }
 
+    public function offwork(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'reason' => ['nullable', 'string', 'max:500'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+        ]);
+        if ($validator->fails()) {
+            return $this->fail(1003, $validator->errors()->first() ?: '参数校验失败');
+        }
+        /** @var array<string,mixed> $validated */
+        $validated = $validator->validated();
+
+        $user = $request->user();
+        if ($user === null) {
+            return $this->fail(1006, '未登录');
+        }
+
+        $now = time();
+        $uid = (int) $user->id;
+        $reason = trim((string) ($validated['reason'] ?? ''));
+        $openOuting = $this->currentOpenOuting($uid);
+
+        if ($openOuting !== null) {
+            if ($reason === '') {
+                return $this->fail(1010, '外出中下班请填写原因');
+            }
+
+            $outingEndAt = $now > (int) $openOuting->start_at ? $now : ((int) $openOuting->start_at + 1);
+            $outingUpdate = [
+                'end_at' => $outingEndAt,
+                'updated_at' => $now,
+            ];
+            if (! empty($validated['address'])) {
+                $outingUpdate['address'] = $validated['address'];
+            }
+            if (array_key_exists('longitude', $validated)) {
+                $outingUpdate['longitude'] = $validated['longitude'];
+            }
+            if (array_key_exists('latitude', $validated)) {
+                $outingUpdate['latitude'] = $validated['latitude'];
+            }
+            DB::table(self::TABLE)->where('id', (int) $openOuting->id)->update($outingUpdate);
+        }
+
+        $latest = $this->latestValidRecord($uid);
+        if ($latest !== null && $latest->end_at !== null && $now <= (int) $latest->end_at) {
+            $now = (int) $latest->end_at + 1;
+        }
+
+        $createdId = (int) DB::table(self::TABLE)->insertGetId([
+            'user_id' => $uid,
+            'work_date' => date('Y-m-d', $now),
+            'record_type' => 3,
+            'start_at' => $now,
+            'end_at' => $now,
+            'source' => 1,
+            'status' => 1,
+            'reason' => $reason !== '' ? $reason : null,
+            'address' => $validated['address'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+            'latitude' => $validated['latitude'] ?? null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return $this->ok('下班成功', ['id' => $createdId]);
+    }
+
     private function validateLocation(Request $request): array|JsonResponse
     {
         $validator = Validator::make($request->all(), [
