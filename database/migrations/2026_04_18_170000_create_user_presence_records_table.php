@@ -18,7 +18,7 @@ return new class extends Migration
             $table->date('work_date')->comment('业务日期（yyyy-mm-dd）');
             $table->unsignedTinyInteger('record_type')->comment('记录类型：1到岗 2外出');
             $table->unsignedInteger('start_at')->comment('开始时间（时间戳）');
-            $table->unsignedInteger('end_at')->comment('结束时间（时间戳）');
+            $table->unsignedInteger('end_at')->nullable()->comment('结束时间（时间戳，未结束可为空）');
             $table->unsignedTinyInteger('source')->default(1)->comment('来源：1小程序 2后台 3导入');
             $table->unsignedTinyInteger('status')->default(1)->comment('状态：1有效 0作废');
             $table->string('reason', 500)->nullable()->comment('原因/说明（外出必填，补录可填）');

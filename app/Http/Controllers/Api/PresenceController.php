@@ -28,8 +28,11 @@ class PresenceController extends Controller
         }
 
         $now = time();
+        if ($this->currentOpenOuting((int) $user->id) !== null) {
+            return $this->fail(1008, '存在进行中的外出记录，请先返回');
+        }
         $latest = $this->latestValidRecord((int) $user->id);
-        if ($latest !== null && $now <= (int) $latest->end_at) {
+        if ($latest !== null && $latest->end_at !== null && $now <= (int) $latest->end_at) {
             return $this->fail(1007, '时间冲突，请稍后再试');
         }
 
@@ -78,7 +81,7 @@ class PresenceController extends Controller
         $now = time();
         $uid = (int) $user->id;
         $latest = $this->latestValidRecord($uid);
-        if ($latest !== null && $now <= (int) $latest->end_at) {
+        if ($latest !== null && $latest->end_at !== null && $now <= (int) $latest->end_at) {
             return $this->fail(1007, '时间冲突，请稍后再试');
         }
         if ($this->currentOpenOuting($uid) !== null) {
@@ -90,7 +93,7 @@ class PresenceController extends Controller
             'work_date' => date('Y-m-d', $now),
             'record_type' => UserPresenceRecordModel::TYPE_OUTING,
             'start_at' => $now,
-            'end_at' => $now,
+            'end_at' => null,
             'source' => 1,
             'status' => UserPresenceRecordModel::STATUS_VALID,
             'reason' => trim((string) $request->input('reason')),
@@ -110,19 +113,32 @@ class PresenceController extends Controller
             return $this->fail(1999, '到岗外出表未就绪');
         }
 
-        $validated = $this->validateLocation($request);
-        if ($validated instanceof JsonResponse) {
-            return $validated;
+        $validator = Validator::make($request->all(), [
+            'outing_id' => ['required', 'integer', 'min:1'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+        ]);
+        if ($validator->fails()) {
+            return $this->fail(1003, $validator->errors()->first() ?: '参数校验失败');
         }
+        /** @var array<string,mixed> $validated */
+        $validated = $validator->validated();
 
         $user = $request->user();
         if ($user === null) {
             return $this->fail(1006, '未登录');
         }
 
-        $open = $this->currentOpenOuting((int) $user->id);
+        $open = UserPresenceRecordModel::query()
+            ->where('id', (int) $validated['outing_id'])
+            ->where('user_id', (int) $user->id)
+            ->where('status', UserPresenceRecordModel::STATUS_VALID)
+            ->where('record_type', UserPresenceRecordModel::TYPE_OUTING)
+            ->whereNull('end_at')
+            ->first();
         if ($open === null) {
-            return $this->fail(1009, '不存在进行中的外出记录');
+            return $this->fail(1009, '外出记录不存在或已结束');
         }
 
         $now = time();
@@ -212,7 +228,7 @@ class PresenceController extends Controller
             ->where('user_id', $userId)
             ->where('status', UserPresenceRecordModel::STATUS_VALID)
             ->where('record_type', UserPresenceRecordModel::TYPE_OUTING)
-            ->whereColumn('end_at', 'start_at')
+            ->whereNull('end_at')
             ->orderByDesc('id')
             ->first();
     }
