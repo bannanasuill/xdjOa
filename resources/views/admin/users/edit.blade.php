@@ -31,10 +31,6 @@
                 <label class="admin-form__label" for="phone">手机</label>
                 <input class="admin-form__input" type="text" id="phone" name="phone" value="{{ old('phone', $user->phone) }}" maxlength="20">
             </div>
-            <div class="admin-form__row">
-                <label class="admin-form__label" for="email">邮箱</label>
-                <input class="admin-form__input" type="email" id="email" name="email" value="{{ old('email', $user->email) }}" maxlength="100">
-            </div>
 
             <div class="admin-form__actions">
                 <a href="{{ route('admin.users.index') }}" class="admin-btn">返回列表</a>

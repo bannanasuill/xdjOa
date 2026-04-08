@@ -387,18 +387,17 @@ class UserService extends Controller
         ]);
     }
 
-    protected static function mergeEmptyPhoneEmail(Request $request): void
+    protected static function mergeEmptyPhone(Request $request): void
     {
         $request->merge([
             'phone' => $request->input('phone') === '' ? null : $request->input('phone'),
-            'email' => $request->input('email') === '' ? null : $request->input('email'),
         ]);
     }
 
-    /** 创建用户：空账号转 null（便于 nullable 校验）；手机号/邮箱同上。 */
+    /** 创建用户：空账号转 null（便于 nullable 校验）；手机号空串转 null。 */
     protected static function mergeCreateUserRequest(Request $request): void
     {
-        self::mergeEmptyPhoneEmail($request);
+        self::mergeEmptyPhone($request);
         $acc = $request->input('account');
         if ($acc === null || (is_string($acc) && trim($acc) === '')) {
             $request->merge(['account' => null]);
@@ -437,12 +436,6 @@ class UserService extends Controller
                     'max:20',
                     Rule::unique('users', 'phone'),
                 ],
-                'email' => [
-                    'nullable',
-                    'email',
-                    'max:100',
-                    Rule::unique('users', 'email'),
-                ],
                 'password' => ['nullable', 'string', 'min:6'],
             ],
             'messages' => [
@@ -470,12 +463,6 @@ class UserService extends Controller
                     'string',
                     'max:20',
                     Rule::unique('users', 'phone')->ignore($user->id),
-                ],
-                'email' => [
-                    'nullable',
-                    'email',
-                    'max:100',
-                    Rule::unique('users', 'email')->ignore($user->id),
                 ],
                 'password' => ['nullable', 'string', 'min:6'],
             ],
@@ -572,7 +559,6 @@ class UserService extends Controller
             'account' => $validated['account'],
             'real_name' => $validated['real_name'],
             'phone' => $validated['phone'],
-            'email' => $validated['email'],
             'role_ids' => $roleIds,
         ];
 
@@ -582,7 +568,6 @@ class UserService extends Controller
                 'password' => $validated['password'],
                 'real_name' => $validated['real_name'],
                 'phone' => $validated['phone'],
-                'email' => $validated['email'],
                 'status' => 1,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -623,7 +608,6 @@ class UserService extends Controller
             'account' => $validated['account'],
             'real_name' => $validated['real_name'],
             'phone' => ($validated['phone'] ?? '') === '' ? null : $validated['phone'],
-            'email' => ($validated['email'] ?? '') === '' ? null : $validated['email'],
             'updated_at' => time(),
         ];
 
@@ -635,7 +619,6 @@ class UserService extends Controller
             'account' => $validated['account'],
             'real_name' => $validated['real_name'] ?: null,
             'phone' => ($validated['phone'] ?? '') === '' ? null : $validated['phone'],
-            'email' => ($validated['email'] ?? '') === '' ? null : $validated['email'],
         ];
 
         try {

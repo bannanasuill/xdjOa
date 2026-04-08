@@ -138,9 +138,6 @@
         <el-form-item label="手机号">
           <el-input v-model="form.phone" autocomplete="off" />
         </el-form-item>
-        <el-form-item label="邮箱">
-          <el-input v-model="form.email" autocomplete="off" />
-        </el-form-item>
       </el-form>
       <span slot="footer" class="admin-dialog-footer">
         <el-button size="small" @click="formVisible=false">取消</el-button>
@@ -248,7 +245,7 @@ export default {
       formMode: 'create',
       editingId: null,
       roleOptions: [],
-      form: { account: '', real_name: '', phone: '', email: '', password: '' },
+      form: { account: '', real_name: '', phone: '', password: '' },
 
       // status remark
       remarkVisible: false,
@@ -350,7 +347,7 @@ export default {
     openCreate() {
       this.formMode = 'create';
       this.editingId = null;
-      this.form = { account: '', real_name: '', phone: '', email: '', password: '' };
+      this.form = { account: '', real_name: '', phone: '', password: '' };
       this.formVisible = true;
     },
     openEdit(row) {
@@ -364,7 +361,6 @@ export default {
         account: row.account || '',
         real_name: row.real_name || '',
         phone: row.phone || '',
-        email: row.email || '',
         password: '',
       };
       this.formVisible = true;
@@ -479,7 +475,6 @@ export default {
         const payload = {
           real_name: this.form.real_name,
           phone: this.form.phone,
-          email: this.form.email,
         };
         if (this.formMode === 'create') {
           if (accTrim) payload.account = accTrim;

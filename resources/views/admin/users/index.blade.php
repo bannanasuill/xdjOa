@@ -60,7 +60,6 @@
                         <th scope="col">姓名</th>
                         <th scope="col">账号</th>
                         <th scope="col">手机</th>
-                        <th scope="col">邮箱</th>
                         <th scope="col">状态</th>
                         <th scope="col">创建时间</th>
                         <th scope="col" class="admin-table__col-actions">操作</th>
@@ -73,7 +72,6 @@
                             <td>{{ $user->real_name ?: '—' }}</td>
                             <td>{{ $user->account }}</td>
                             <td>{{ $user->phone ?: '—' }}</td>
-                            <td>{{ $user->email ?: '—' }}</td>
                             <td>
                                 @if ($user->isSuperAdminAccount())
                                     @if ((int) $user->status === 1)

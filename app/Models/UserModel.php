@@ -41,7 +41,6 @@ class UserModel extends Authenticatable
         'password',
         'real_name',
         'phone',
-        'email',
         'status',
         'created_at',
         'updated_at',
