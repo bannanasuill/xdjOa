@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PresenceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -23,4 +24,11 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+});
+
+Route::middleware('auth:sanctum')->prefix('presence')->group(function () {
+    Route::post('/arrival', [PresenceController::class, 'arrival']);
+    Route::post('/outing/start', [PresenceController::class, 'outingStart']);
+    Route::post('/outing/end', [PresenceController::class, 'outingEnd']);
+    Route::get('/today', [PresenceController::class, 'today']);
 });
