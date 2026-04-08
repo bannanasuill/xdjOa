@@ -8,10 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('user_presence_records')) {
+        $table = 'user_presence_records';
+        if (! Schema::hasTable($table)) {
             return;
         }
-        if (! Schema::hasColumn('user_presence_records', 'end_at')) {
+        if (! Schema::hasColumn($table, 'end_at')) {
             return;
         }
 
@@ -20,10 +21,11 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (! Schema::hasTable('user_presence_records')) {
+        $table = 'user_presence_records';
+        if (! Schema::hasTable($table)) {
             return;
         }
-        if (! Schema::hasColumn('user_presence_records', 'end_at')) {
+        if (! Schema::hasColumn($table, 'end_at')) {
             return;
         }
 

@@ -8,11 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('user_presence_records')) {
+        $table = 'user_presence_records';
+        if (Schema::hasTable($table)) {
             return;
         }
 
-        Schema::create('user_presence_records', function (Blueprint $table) {
+        Schema::create($table, function (Blueprint $table) {
             $table->bigIncrements('id')->comment('主键ID');
             $table->unsignedBigInteger('user_id')->comment('用户ID（对应 users.id）');
             $table->date('work_date')->comment('业务日期（yyyy-mm-dd）');

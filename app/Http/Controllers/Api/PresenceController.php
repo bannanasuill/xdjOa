@@ -3,20 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\UserPresenceRecordModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class PresenceController extends Controller
 {
+    private const TABLE = 'user_presence_records';
+
     public function arrival(Request $request): JsonResponse
     {
-        if (! Schema::hasTable('user_presence_records')) {
-            return $this->fail(1999, '到岗外出表未就绪');
-        }
-
         $validated = $this->validateLocation($request);
         if ($validated instanceof JsonResponse) {
             return $validated;
@@ -39,11 +36,11 @@ class PresenceController extends Controller
         $data = [
             'user_id' => (int) $user->id,
             'work_date' => date('Y-m-d', $now),
-            'record_type' => UserPresenceRecordModel::TYPE_ARRIVAL,
+            'record_type' => 1,
             'start_at' => $now,
             'end_at' => $now,
             'source' => 1,
-            'status' => UserPresenceRecordModel::STATUS_VALID,
+            'status' => 1,
             'reason' => null,
             'address' => $validated['address'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
@@ -52,17 +49,13 @@ class PresenceController extends Controller
             'updated_at' => $now,
         ];
 
-        $created = UserPresenceRecordModel::query()->create($data);
+        $createdId = (int) DB::table(self::TABLE)->insertGetId($data);
 
-        return $this->ok('到岗成功', ['id' => (int) $created->id]);
+        return $this->ok('到岗成功', ['id' => $createdId]);
     }
 
     public function outingStart(Request $request): JsonResponse
     {
-        if (! Schema::hasTable('user_presence_records')) {
-            return $this->fail(1999, '到岗外出表未就绪');
-        }
-
         $validator = Validator::make($request->all(), [
             'reason' => ['required', 'string', 'max:500'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -88,14 +81,14 @@ class PresenceController extends Controller
             return $this->fail(1008, '存在进行中的外出记录，请先返回');
         }
 
-        $created = UserPresenceRecordModel::query()->create([
+        $createdId = (int) DB::table(self::TABLE)->insertGetId([
             'user_id' => $uid,
             'work_date' => date('Y-m-d', $now),
-            'record_type' => UserPresenceRecordModel::TYPE_OUTING,
+            'record_type' => 2,
             'start_at' => $now,
             'end_at' => null,
             'source' => 1,
-            'status' => UserPresenceRecordModel::STATUS_VALID,
+            'status' => 1,
             'reason' => trim((string) $request->input('reason')),
             'address' => $request->input('address'),
             'longitude' => $request->input('longitude'),
@@ -104,15 +97,11 @@ class PresenceController extends Controller
             'updated_at' => $now,
         ]);
 
-        return $this->ok('外出开始成功', ['id' => (int) $created->id]);
+        return $this->ok('外出开始成功', ['id' => $createdId]);
     }
 
     public function outingEnd(Request $request): JsonResponse
     {
-        if (! Schema::hasTable('user_presence_records')) {
-            return $this->fail(1999, '到岗外出表未就绪');
-        }
-
         $validator = Validator::make($request->all(), [
             'outing_id' => ['required', 'integer', 'min:1'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -130,11 +119,11 @@ class PresenceController extends Controller
             return $this->fail(1006, '未登录');
         }
 
-        $open = UserPresenceRecordModel::query()
+        $open = DB::table(self::TABLE)
             ->where('id', (int) $validated['outing_id'])
             ->where('user_id', (int) $user->id)
-            ->where('status', UserPresenceRecordModel::STATUS_VALID)
-            ->where('record_type', UserPresenceRecordModel::TYPE_OUTING)
+            ->where('status', 1)
+            ->where('record_type', 2)
             ->whereNull('end_at')
             ->first();
         if ($open === null) {
@@ -143,40 +132,38 @@ class PresenceController extends Controller
 
         $now = time();
         $endAt = $now > (int) $open->start_at ? $now : ((int) $open->start_at + 1);
-        $open->end_at = $endAt;
-        $open->updated_at = $now;
+        $update = [
+            'end_at' => $endAt,
+            'updated_at' => $now,
+        ];
         if (! empty($validated['address'])) {
-            $open->address = $validated['address'];
+            $update['address'] = $validated['address'];
         }
         if (array_key_exists('longitude', $validated)) {
-            $open->longitude = $validated['longitude'];
+            $update['longitude'] = $validated['longitude'];
         }
         if (array_key_exists('latitude', $validated)) {
-            $open->latitude = $validated['latitude'];
+            $update['latitude'] = $validated['latitude'];
         }
-        $open->save();
+        DB::table(self::TABLE)->where('id', (int) $open->id)->update($update);
 
         return $this->ok('外出结束成功', [
             'id' => (int) $open->id,
-            'duration_minutes' => (int) floor(((int) $open->end_at - (int) $open->start_at) / 60),
+            'duration_minutes' => (int) floor(($endAt - (int) $open->start_at) / 60),
         ]);
     }
 
     public function today(Request $request): JsonResponse
     {
-        if (! Schema::hasTable('user_presence_records')) {
-            return $this->fail(1999, '到岗外出表未就绪');
-        }
-
         $user = $request->user();
         if ($user === null) {
             return $this->fail(1006, '未登录');
         }
 
         $today = date('Y-m-d');
-        $rows = UserPresenceRecordModel::query()
+        $rows = DB::table(self::TABLE)
             ->where('user_id', (int) $user->id)
-            ->where('status', UserPresenceRecordModel::STATUS_VALID)
+            ->where('status', 1)
             ->where('work_date', $today)
             ->orderBy('start_at')
             ->orderBy('id')
@@ -184,7 +171,7 @@ class PresenceController extends Controller
 
         return $this->ok('获取成功', [
             'date' => $today,
-            'records' => $rows->map(fn (UserPresenceRecordModel $r) => [
+            'records' => $rows->map(fn ($r) => [
                 'id' => (int) $r->id,
                 'record_type' => (int) $r->record_type,
                 'start_at' => (int) $r->start_at,
@@ -212,22 +199,22 @@ class PresenceController extends Controller
         return $validator->validated();
     }
 
-    private function latestValidRecord(int $userId): ?UserPresenceRecordModel
+    private function latestValidRecord(int $userId): ?object
     {
-        return UserPresenceRecordModel::query()
+        return DB::table(self::TABLE)
             ->where('user_id', $userId)
-            ->where('status', UserPresenceRecordModel::STATUS_VALID)
+            ->where('status', 1)
             ->orderByDesc('end_at')
             ->orderByDesc('id')
             ->first();
     }
 
-    private function currentOpenOuting(int $userId): ?UserPresenceRecordModel
+    private function currentOpenOuting(int $userId): ?object
     {
-        return UserPresenceRecordModel::query()
+        return DB::table(self::TABLE)
             ->where('user_id', $userId)
-            ->where('status', UserPresenceRecordModel::STATUS_VALID)
-            ->where('record_type', UserPresenceRecordModel::TYPE_OUTING)
+            ->where('status', 1)
+            ->where('record_type', 2)
             ->whereNull('end_at')
             ->orderByDesc('id')
             ->first();
