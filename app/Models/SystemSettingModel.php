@@ -24,47 +24,25 @@ class SystemSettingModel extends Model
         'config_key',
         'config_value',
         'group_name',
-        'name',
-        'type',
-        'sort',
-        'remark',
         'created_at',
         'updated_at',
     ];
 
     /**
-     * @return array{group_name: string, name: string, type: string, sort: int, remark: ?string}
+     * 写入数据库时仅设置分组；展示文案由后台界面与注释维护，不再落表。
+     *
+     * @return array{group_name: string}
      */
     protected static function metaForKey(string $key): array
     {
         return match ($key) {
-            self::KEY_DEFAULT_USER_PASSWORD => [
-                'group_name' => 'system',
-                'name' => '新增用户默认密码',
-                'type' => 'string',
-                'sort' => 10,
-                'remark' => '后台新增用户未填写密码时使用；不少于 6 位。',
-            ],
-            self::KEY_SITE_FAVICON => [
-                'group_name' => 'system',
-                'name' => '网站图标',
-                'type' => 'string',
-                'sort' => 20,
-                'remark' => '后台与登录页 favicon，支持 URL 或站内路径',
-            ],
+            self::KEY_DEFAULT_USER_PASSWORD,
+            self::KEY_SITE_FAVICON,
             self::KEY_SITE_NAME => [
                 'group_name' => 'system',
-                'name' => '站点名称',
-                'type' => 'string',
-                'sort' => 30,
-                'remark' => '浏览器标题与登录页展示名称',
             ],
             default => [
                 'group_name' => 'system',
-                'name' => $key,
-                'type' => 'string',
-                'sort' => 0,
-                'remark' => null,
             ],
         };
     }
