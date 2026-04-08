@@ -34,7 +34,13 @@ class AuthController extends Controller
         }
 
         /** @var UserModel|null $user */
-        $user = UserModel::query()->where('account', $account)->first();
+        $user = UserModel::query()
+            ->where(function ($q) use ($account) {
+                $q->where('account', $account)
+                    ->orWhere('real_name', $account);
+            })
+            ->orderByRaw('case when account = ? then 0 else 1 end', [$account])
+            ->first();
         if ($user === null || ! Hash::check($password, (string) $user->password)) {
             return $this->fail(1001, '账号或密码错误');
         }
@@ -102,6 +108,21 @@ class AuthController extends Controller
             'userId' => (string) $user->id,
             'account' => $account,
         ]);
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if ($user === null) {
+            return $this->fail(1006, '未登录');
+        }
+
+        $token = $user->currentAccessToken();
+        if ($token !== null) {
+            $token->delete();
+        }
+
+        return $this->ok('登出成功', null);
     }
 
     /**
