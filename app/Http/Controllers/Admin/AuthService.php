@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\UserLogModel;
 use App\Models\UserModel;
+use App\Support\AdminLoginRateLimit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AuthService extends Controller
@@ -18,11 +18,13 @@ class AuthService extends Controller
     /** 同一账号 + IP：失败次数上限，窗口内超限则临时禁止登录 */
     private const LOGIN_IP_ACCOUNT_MAX_ATTEMPTS = 5;
 
+    /** 同一账号 + IP：失败次数窗口期，窗口期结束后重置失败次数 */
     private const LOGIN_IP_ACCOUNT_DECAY_SECONDS = 900;
 
     /** 同一已存在用户 ID：全 IP 累计失败上限（防分布式暴破） */
     private const LOGIN_USER_MAX_ATTEMPTS = 20;
 
+    /** 同一已存在用户 ID：失败次数窗口期，窗口期结束后重置失败次数 */
     private const LOGIN_USER_DECAY_SECONDS = 3600;
 
     public function showLoginForm(): View
@@ -30,30 +32,20 @@ class AuthService extends Controller
         return view('admin.auth.login');
     }
 
-    private function adminLoginIpAccountKey(Request $request, string $account): string
-    {
-        return 'admin-login:'.sha1(Str::lower(trim($account)).'|'.$request->ip());
-    }
-
-    private function adminLoginUserKey(int $userId): string
-    {
-        return 'admin-login-acc:'.$userId;
-    }
-
     /**
      * @return RedirectResponse|null 若已限流则返回重定向，否则 null
      */
     private function ensureLoginNotRateLimited(Request $request, string $account, ?UserModel $user): ?RedirectResponse
     {
-        $ipAccKey = $this->adminLoginIpAccountKey($request, $account);
+        $ipAccKey = AdminLoginRateLimit::ipAccountKey($account, (string) $request->ip());
         if (RateLimiter::tooManyAttempts($ipAccKey, self::LOGIN_IP_ACCOUNT_MAX_ATTEMPTS)) {
             $sec = RateLimiter::availableIn($ipAccKey);
 
             return $this->loginLockedResponse($request, $account, $sec, '登录尝试过于频繁（本机或当前账号），请稍后再试。');
         }
 
-        if ($user !== null && RateLimiter::tooManyAttempts($this->adminLoginUserKey($user->id), self::LOGIN_USER_MAX_ATTEMPTS)) {
-            $sec = RateLimiter::availableIn($this->adminLoginUserKey($user->id));
+        if ($user !== null && RateLimiter::tooManyAttempts(AdminLoginRateLimit::userKey($user->id), self::LOGIN_USER_MAX_ATTEMPTS)) {
+            $sec = RateLimiter::availableIn(AdminLoginRateLimit::userKey($user->id));
 
             return $this->loginLockedResponse($request, $account, $sec, '该账号登录失败次数过多，已临时限制，请稍后再试。');
         }
@@ -73,20 +65,19 @@ class AuthService extends Controller
 
     private function clearAdminLoginRateLimit(Request $request, string $account, UserModel $user): void
     {
-        RateLimiter::clear($this->adminLoginIpAccountKey($request, $account));
-        RateLimiter::clear($this->adminLoginUserKey($user->id));
+        AdminLoginRateLimit::clearAfterSuccessfulLogin($account, (string) $request->ip(), $user->id);
     }
 
     private function hitAdminLoginRateLimitOnFailure(Request $request, string $account, ?UserModel $user): void
     {
         RateLimiter::hit(
-            $this->adminLoginIpAccountKey($request, $account),
+            AdminLoginRateLimit::ipAccountKey($account, (string) $request->ip()),
             self::LOGIN_IP_ACCOUNT_DECAY_SECONDS
         );
 
         if ($user !== null) {
             RateLimiter::hit(
-                $this->adminLoginUserKey($user->id),
+                AdminLoginRateLimit::userKey($user->id),
                 self::LOGIN_USER_DECAY_SECONDS
             );
         }
