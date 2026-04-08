@@ -12,9 +12,10 @@ class SystemSettingModel extends Model
 {
     public const KEY_DEFAULT_USER_PASSWORD = 'default_user_password';
 
-    public const KEY_SITE_FAVICON = 'site_favicon';
-
     public const KEY_SITE_NAME = 'site_name';
+
+    /** 网站图标固定使用 public 下路径，不在后台配置。 */
+    public const BRAND_LOGO_PUBLIC_PATH = 'images/logo.png';
 
     protected $table = 'configs';
 
@@ -37,7 +38,6 @@ class SystemSettingModel extends Model
     {
         return match ($key) {
             self::KEY_DEFAULT_USER_PASSWORD,
-            self::KEY_SITE_FAVICON,
             self::KEY_SITE_NAME => [
                 'group_name' => 'system',
             ],
@@ -98,18 +98,29 @@ class SystemSettingModel extends Model
         static::query()->where('config_key', $key)->delete();
     }
 
+    /** 按 logo 修改时间生成缓存版本号，避免浏览器长期缓存旧 favicon。 */
+    public static function brandLogoCacheVersion(): int
+    {
+        $path = public_path(self::BRAND_LOGO_PUBLIC_PATH);
+
+        return is_file($path) ? (int) filemtime($path) : 1;
+    }
+
     public static function resolvedFaviconHref(): string
     {
-        $v = self::get(self::KEY_SITE_FAVICON);
-        if ($v === null || trim($v) === '') {
-            return asset('favicon.ico');
-        }
-        $v = trim($v);
-        if (str_starts_with($v, 'http://') || str_starts_with($v, 'https://') || str_starts_with($v, '//')) {
-            return $v;
-        }
+        $base = asset(self::BRAND_LOGO_PUBLIC_PATH);
+        $v = self::brandLogoCacheVersion();
 
-        return asset(ltrim($v, '/'));
+        return $v > 0 ? $base.'?v='.$v : $base;
+    }
+
+    /** 与 public/favicon.ico（内容与 logo 一致）配套，便于浏览器默认请求 /favicon.ico。 */
+    public static function faviconIcoHref(): string
+    {
+        $base = asset('favicon.ico');
+        $v = self::brandLogoCacheVersion();
+
+        return $v > 0 ? $base.'?v='.$v : $base;
     }
 
     public static function resolvedSiteName(): string

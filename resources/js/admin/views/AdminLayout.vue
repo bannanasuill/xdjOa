@@ -2,8 +2,13 @@
   <el-container class="admin-shell" :class="[themeClass, { 'admin-aside--collapsed': isCollapsed }]">
     <el-aside :width="isCollapsed ? '64px' : '220px'" class="admin-aside">
       <div class="admin-brand">
-        <span v-if="!isCollapsed">{{ siteBrand }}</span>
-        <i v-else class="el-icon-menu"></i>
+        <img
+          v-if="brandLogoSrc"
+          :src="brandLogoSrc"
+          alt=""
+          class="admin-brand__logo"
+        >
+        <span v-if="!isCollapsed" class="admin-brand__text">{{ siteBrand }}</span>
       </div>
       <el-menu
         :key="menuBranchKey"
@@ -113,6 +118,17 @@ export default {
       return typeof window !== 'undefined' && window.__ADMIN_SITE_NAME__
         ? window.__ADMIN_SITE_NAME__
         : '洗多家后台';
+    },
+    /** 固定品牌图，与 admin/app.blade.php 中 __ADMIN_FAVICON__ 同源 */
+    brandLogoSrc() {
+      if (this.shellFavicon) {
+        return this.shellFavicon;
+      }
+      if (typeof window !== 'undefined' && window.__ADMIN_FAVICON__) {
+        return window.__ADMIN_FAVICON__;
+      }
+
+      return '';
     },
     pageTitle() {
       if (this.$route.name === 'admin.users') return '用户';
@@ -237,6 +253,7 @@ export default {
           link.setAttribute('rel', 'icon');
           document.head.appendChild(link);
         }
+        link.setAttribute('type', 'image/png');
         link.setAttribute('href', href);
       }
       const p = this.pageTitle;

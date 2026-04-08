@@ -14,6 +14,17 @@ use App\Http\Controllers\Admin\SystemConfigService;
 use App\Http\Controllers\Admin\UserLogService;
 use App\Http\Controllers\Admin\UserService;
 use Illuminate\Support\Facades\Route;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+
+Route::get('/favicon.ico', static function (): BinaryFileResponse {
+    $path = public_path('images/logo.png');
+    abort_unless(is_file($path), 404);
+
+    return response()->file($path, [
+        'Content-Type' => 'image/png',
+        'Cache-Control' => 'public, max-age=604800',
+    ]);
+})->name('favicon');
 
 Route::get('/', function () {
     if (auth()->check()) {

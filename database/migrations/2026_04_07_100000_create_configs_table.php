@@ -28,9 +28,6 @@ return new class extends Migration
                 'default_user_password' => [
                     'group_name' => 'system',
                 ],
-                'site_favicon' => [
-                    'group_name' => 'system',
-                ],
                 'site_name' => [
                     'group_name' => 'system',
                 ],

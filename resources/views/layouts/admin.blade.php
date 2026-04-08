@@ -4,7 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', '后台') — {{ $adminSiteName ?? '洗多家后台' }}</title>
-    <link rel="icon" href="{{ $adminFaviconHref ?? asset('favicon.ico') }}" sizes="any">
+    @php
+        $faviconIcoHref = \App\Models\SystemSettingModel::faviconIcoHref();
+        $adminIconHref = $adminFaviconHref ?? \App\Models\SystemSettingModel::resolvedFaviconHref();
+    @endphp
+    <link rel="icon" type="image/png" href="{{ $faviconIcoHref }}" sizes="any">
+    <link rel="icon" type="image/png" href="{{ $adminIconHref }}" sizes="32x32">
+    <link rel="shortcut icon" type="image/png" href="{{ $faviconIcoHref }}">
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/admin-layout.css') }}">

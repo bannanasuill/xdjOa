@@ -6,10 +6,17 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <title>{{ $adminSiteName ?? '洗多家后台' }} — 后台</title>
-    <link rel="icon" href="{{ $adminFaviconHref ?? asset('favicon.ico') }}" sizes="any">
+    @php
+        $faviconIcoHref = \App\Models\SystemSettingModel::faviconIcoHref();
+        $adminIconHref = $adminFaviconHref ?? \App\Models\SystemSettingModel::resolvedFaviconHref();
+    @endphp
+    {{-- 根路径 /favicon.ico 便于浏览器默认抓取；与 logo.png 同源并带版本号避免强缓存旧图标 --}}
+    <link rel="icon" type="image/png" href="{{ $faviconIcoHref }}" sizes="any">
+    <link rel="icon" type="image/png" href="{{ $adminIconHref }}" sizes="32x32">
+    <link rel="apple-touch-icon" href="{{ $adminIconHref }}">
     <script>
         window.__ADMIN_SITE_NAME__ = @json($adminSiteName ?? '洗多家后台');
-        window.__ADMIN_FAVICON__ = @json($adminFaviconHref ?? asset('favicon.ico'));
+        window.__ADMIN_FAVICON__ = @json($adminIconHref);
     </script>
     <script>
         (function () {

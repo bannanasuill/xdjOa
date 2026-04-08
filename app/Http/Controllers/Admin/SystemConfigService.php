@@ -23,9 +23,9 @@ class SystemConfigService extends Controller
             'data' => [
                 'default_user_password_set' => $pwdInDb,
                 'default_user_password' => $displayPassword,
-                'site_favicon' => SystemSettingModel::get(SystemSettingModel::KEY_SITE_FAVICON) ?? '',
                 'site_name' => SystemSettingModel::get(SystemSettingModel::KEY_SITE_NAME) ?? '',
                 'site_name_display' => SystemSettingModel::resolvedSiteName(),
+                /** 固定资源，非配置项，供 SPA 刷新顶栏图标与会话内 window 变量 */
                 'site_favicon_resolved' => SystemSettingModel::resolvedFaviconHref(),
             ],
         ]);
@@ -34,7 +34,6 @@ class SystemConfigService extends Controller
     public function apiUpdate(Request $request): JsonResponse
     {
         $request->validate([
-            'site_favicon' => ['sometimes', 'nullable', 'string', 'max:500'],
             'site_name' => ['sometimes', 'nullable', 'string', 'max:100'],
         ]);
 
@@ -50,15 +49,6 @@ class SystemConfigService extends Controller
                     ]);
                 }
                 SystemSettingModel::set(SystemSettingModel::KEY_DEFAULT_USER_PASSWORD, $pw);
-            }
-        }
-
-        if ($request->has('site_favicon')) {
-            $fv = trim((string) $request->input('site_favicon', ''));
-            if ($fv === '') {
-                SystemSettingModel::deleteKey(SystemSettingModel::KEY_SITE_FAVICON);
-            } else {
-                SystemSettingModel::set(SystemSettingModel::KEY_SITE_FAVICON, $fv);
             }
         }
 

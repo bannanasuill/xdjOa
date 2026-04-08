@@ -14,15 +14,6 @@
             :disabled="!canSave"
           />
         </el-form-item>
-        <el-form-item label="网站图标 URL">
-          <el-input
-            v-model="form.site_favicon"
-            maxlength="500"
-            placeholder="完整 URL，或站内路径如 /favicon.ico；留空保存则使用默认 favicon"
-            :disabled="!canSave"
-          />
-          <div class="admin-form-hint">支持 http(s) 链接或相对站点根路径。</div>
-        </el-form-item>
         <el-form-item label="用户默认密码">
           <el-input
             v-model="form.default_user_password"
@@ -50,12 +41,10 @@ export default {
       saving: false,
       configState: {
         default_user_password_set: false,
-        site_favicon: '',
         site_name: '',
       },
       form: {
         site_name: '',
-        site_favicon: '',
         default_user_password: '',
       },
       clearSavedPassword: false,
@@ -77,12 +66,10 @@ export default {
         const row = data.data || {};
         this.configState = {
           default_user_password_set: !!row.default_user_password_set,
-          site_favicon: row.site_favicon || '',
           site_name: row.site_name || '',
         };
         this.form = {
           site_name: this.configState.site_name,
-          site_favicon: this.configState.site_favicon,
           default_user_password:
             row.default_user_password != null && row.default_user_password !== undefined
               ? String(row.default_user_password)
@@ -123,7 +110,6 @@ export default {
       try {
         const payload = {
           site_name: this.form.site_name,
-          site_favicon: this.form.site_favicon,
         };
         const raw = (this.form.default_user_password || '').trim();
         if (this.clearSavedPassword) {
