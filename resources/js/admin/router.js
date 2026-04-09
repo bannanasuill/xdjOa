@@ -12,6 +12,8 @@ import AdminSettings from './views/AdminSettings.vue';
 import AdminExpenseTemplates from './views/AdminExpenseTemplates.vue';
 import AdminExpenseApply from './views/AdminExpenseApply.vue';
 import AdminDepartments from './views/AdminDepartments.vue';
+import AdminStores from './views/AdminStores.vue';
+import AdminAttendanceRules from './views/AdminAttendanceRules.vue';
 import { Message } from 'element-ui';
 import { ensureAdminPermissions, canAdminPermission } from './permissions';
 
@@ -34,6 +36,18 @@ const router = new Router({
                     component: AdminDepartments,
                 },
                 { path: 'positions', redirect: { name: 'admin.departments' } },
+                {
+                  path: 'stores',
+                  name: 'admin.stores',
+                  meta: { perm: 'perm.admin.stores' },
+                  component: AdminStores,
+                },
+                {
+                  path: 'attendance-rules',
+                  name: 'admin.attendance_rules',
+                  meta: { perm: 'perm.admin.attendance_rules' },
+                  component: AdminAttendanceRules,
+                },
                 { path: 'logs', name: 'admin.logs', meta: { perm: 'perm.admin.logs' }, component: AdminLogs },
                 { path: 'menus', name: 'admin.menus', meta: { perm: 'perm.admin.menus' }, component: AdminMenus },
                 { path: 'permissions', name: 'admin.permissions', meta: { perm: 'perm.admin.permissions' }, component: AdminPermissions },

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DepartmentModel;
 use App\Models\PositionModel;
 use App\Models\RoleModel;
+use App\Models\StoreModel;
 use App\Models\SystemSettingModel;
 use App\Models\UserLogModel;
 use App\Models\UserModel;
@@ -15,7 +16,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Carbon\Carbon;
 use Illuminate\View\View;
 use Throwable;
 
@@ -122,6 +125,7 @@ class UserService extends Controller
             'roleFilterOptions' => RoleModel::assignableForUserPicker(),
             'perPage' => $payload['perPage'],
             'perPageOptions' => [10, 20, 50, 100],
+            'presenceMetaMap' => $payload['presenceMetaMap'] ?? [],
         ]);
     }
 
@@ -320,6 +324,203 @@ class UserService extends Controller
         ]);
     }
 
+    /**
+     * 分配门店弹窗：启用中的门店列表 + 职务列表（与组织选项一致）。
+     */
+    public function apiStoreAssignmentOptions(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+        if ($actor === null) {
+            return response()->json(['message' => '未登录'], 401);
+        }
+        if (! $actor->canAdminPermission('perm.admin.api.users.update')) {
+            return response()->json(['message' => '无权查看门店分配选项'], 403);
+        }
+
+        $positions = [];
+        $orgResp = $this->apiOrgOptions($request);
+        $orgPayload = json_decode($orgResp->getContent(), true);
+        if (is_array($orgPayload)) {
+            $positions = $orgPayload['data']['positions'] ?? [];
+        }
+
+        $stores = [];
+        if (Schema::hasTable('stores')) {
+            $stores = StoreModel::query()
+                ->where('status', 1)
+                ->orderBy('name')
+                ->orderByDesc('id')
+                ->get(['id', 'code', 'name', 'store_type'])
+                ->map(static function (StoreModel $s) {
+                    return [
+                        'id' => (int) $s->id,
+                        'code' => trim((string) ($s->code ?? '')),
+                        'name' => trim((string) ($s->name ?? '')),
+                        'store_type' => (int) ($s->store_type ?? 1),
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        return response()->json([
+            'data' => [
+                'stores' => $stores,
+                'positions' => $positions,
+            ],
+        ]);
+    }
+
+    /** 某用户当前门店任职列表（编辑分配用）。 */
+    public function apiUserStores(Request $request, UserModel $adminUser): JsonResponse
+    {
+        if ($adminUser->isSuperAdminAccount()) {
+            return response()->json(['message' => '超级管理员无需分配门店'], 403);
+        }
+
+        $actor = $request->user();
+        if ($actor === null) {
+            return response()->json(['message' => '未登录'], 401);
+        }
+        if (! $actor->canAdminPermission('perm.admin.api.users.update')) {
+            return response()->json(['message' => '无权查看'], 403);
+        }
+
+        if (! Schema::hasTable('user_stores')) {
+            return response()->json(['data' => []]);
+        }
+
+        $map = UserModel::userStoresMapForUserIds([(int) $adminUser->id]);
+
+        return response()->json(['data' => $map[(int) $adminUser->id] ?? []]);
+    }
+
+    /**
+     * 全量覆盖用户门店任职：须恰好一个主门店（有任一行时）。
+     *
+     * @throws ValidationException
+     */
+    public function apiUserStoresSync(Request $request, UserModel $adminUser): JsonResponse
+    {
+        if ($adminUser->isSuperAdminAccount()) {
+            return response()->json(['message' => '超级管理员不可分配门店'], 403);
+        }
+
+        $actor = $request->user();
+        if ($actor === null) {
+            return response()->json(['message' => '未登录'], 401);
+        }
+        if (! $actor->canAdminPermission('perm.admin.api.users.update')) {
+            return response()->json(['message' => '无权保存'], 403);
+        }
+
+        if (! Schema::hasTable('user_stores')) {
+            return response()->json(['message' => '用户门店关联表未创建'], 503);
+        }
+        if (! Schema::hasTable('stores') || ! Schema::hasTable('positions')) {
+            throw ValidationException::withMessages([
+                'assignments' => '门店或职务表不可用。',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'assignments' => ['present', 'array'],
+            'assignments.*.store_id' => ['required', 'integer', 'min:1'],
+            'assignments.*.position_id' => ['required', 'integer', 'min:1'],
+            'assignments.*.is_main' => ['required', 'integer', 'in:0,1'],
+            'assignments.*.start_date' => ['required', 'date'],
+            'assignments.*.end_date' => ['nullable', 'date'],
+        ]);
+
+        /** @var list<array{store_id:int, position_id:int, is_main:int, start_date:string, end_date?:string|null}> $assignments */
+        $assignments = [];
+        foreach ($validated['assignments'] as $row) {
+            $sid = (int) $row['store_id'];
+            $pid = (int) $row['position_id'];
+            $endRaw = $row['end_date'] ?? null;
+            $end = ($endRaw !== null && $endRaw !== '') ? Carbon::parse((string) $endRaw)->format('Y-m-d') : '9999-12-31';
+            $start = Carbon::parse((string) $row['start_date'])->format('Y-m-d');
+            if (Carbon::parse($start)->gt(Carbon::parse($end))) {
+                throw ValidationException::withMessages([
+                    'assignments' => '生效日期不能晚于失效日期。',
+                ]);
+            }
+            $assignments[] = [
+                'store_id' => $sid,
+                'position_id' => $pid,
+                'is_main' => (int) $row['is_main'],
+                'start_date' => $start,
+                'end_date' => $end,
+            ];
+        }
+
+        if ($assignments === []) {
+            DB::table('user_stores')->where('user_id', $adminUser->id)->delete();
+
+            return response()->json(['ok' => true, 'message' => '已清空门店分配。']);
+        }
+
+        $dup = [];
+        foreach ($assignments as $a) {
+            $k = $a['store_id'].'-'.$a['position_id'];
+            if (isset($dup[$k])) {
+                throw ValidationException::withMessages([
+                    'assignments' => '同一门店与职务的组合不能重复。',
+                ]);
+            }
+            $dup[$k] = true;
+        }
+
+        $mainCount = count(array_filter($assignments, static fn (array $a) => $a['is_main'] === 1));
+        if ($mainCount !== 1) {
+            throw ValidationException::withMessages([
+                'assignments' => '须指定且仅能指定一个「主门店」（is_main = 1）。',
+            ]);
+        }
+
+        $storeIds = array_values(array_unique(array_map(static fn (array $a) => $a['store_id'], $assignments)));
+        $positionIds = array_values(array_unique(array_map(static fn (array $a) => $a['position_id'], $assignments)));
+
+        $validStores = StoreModel::query()
+            ->where('status', 1)
+            ->whereIn('id', $storeIds)
+            ->pluck('id')
+            ->map(static fn ($id) => (int) $id)
+            ->all();
+        if (count($validStores) !== count($storeIds)) {
+            throw ValidationException::withMessages(['assignments' => '存在无效或未启用的门店。']);
+        }
+
+        $validPos = PositionModel::query()
+            ->where('status', 1)
+            ->whereIn('id', $positionIds)
+            ->pluck('id')
+            ->map(static fn ($id) => (int) $id)
+            ->all();
+        if (count($validPos) !== count($positionIds)) {
+            throw ValidationException::withMessages(['assignments' => '存在无效或未启用的职务。']);
+        }
+
+        $now = time();
+        DB::transaction(function () use ($adminUser, $assignments, $now) {
+            DB::table('user_stores')->where('user_id', $adminUser->id)->delete();
+            foreach ($assignments as $a) {
+                DB::table('user_stores')->insert([
+                    'user_id' => $adminUser->id,
+                    'store_id' => $a['store_id'],
+                    'position_id' => $a['position_id'],
+                    'is_main' => $a['is_main'],
+                    'start_date' => $a['start_date'],
+                    'end_date' => $a['end_date'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+        });
+
+        return response()->json(['ok' => true, 'message' => '门店分配已更新。']);
+    }
+
     /** Blade 切换启用/禁用，须备注；超级管理员不可改。 */
     public function updateStatus(Request $request, UserModel $adminUser): RedirectResponse
     {
@@ -505,11 +706,15 @@ class UserService extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
+        $presenceUserIds = $users->getCollection()->pluck('id')->map(static fn ($id) => (int) $id)->values()->all();
+        $presenceMetaMap = UserModel::presenceTodayMetaMapForUserIds($presenceUserIds);
+
         return [
             'users' => $users,
             'searchQuery' => $keyword,
             'filterRoleId' => $roleId,
             'perPage' => $perPage,
+            'presenceMetaMap' => $presenceMetaMap,
         ];
     }
 

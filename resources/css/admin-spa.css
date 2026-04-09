@@ -704,6 +704,36 @@ html[data-admin-theme='dark'] .admin-pos-existing-meta {
   color: rgba(148, 163, 184, 0.95);
 }
 
+/* 部门与职务：工具条与表头区 */
+.admin-departments-page .admin-dept-toolbar-card .el-card__body {
+  padding-bottom: 14px;
+}
+.admin-departments-page .admin-dept-toolbar-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.admin-departments-page .admin-dept-view-mode.el-radio-group {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  border-radius: 4px;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-view-mode.el-radio-group,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-view-mode.el-radio-group {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* 职务列表：浅色主题下 plain 删除钮更易读、不过分刺眼 */
+.admin-departments-page .admin-dept-actions .el-button--danger.is-plain {
+  color: #c45656;
+  border-color: #e8b4b4;
+  background: #fff;
+}
+.admin-departments-page .admin-dept-actions .el-button--danger.is-plain:hover,
+.admin-departments-page .admin-dept-actions .el-button--danger.is-plain:focus {
+  color: #b34545;
+  border-color: #d67e7e;
+  background: #fff8f8;
+}
+
 /* 部门/职务列表：操作列横排 + 去掉 Element 默认按钮外边距，避免删除钮单独换行成「灰块」 */
 .admin-departments-page .admin-dept-actions {
   display: inline-flex;
@@ -736,6 +766,63 @@ html[data-admin-theme='dark'] .admin-departments-page .admin-dept-actions .el-bu
   background-color: #dc2626;
   border-color: #dc2626;
   color: #fff;
+}
+
+/* 职务树：线框删除按钮（plain），暗色下勿铺满大红底 */
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-actions .el-button--danger.is-plain,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-actions .el-button--danger.is-plain {
+  background: transparent;
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #f87171;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-actions .el-button--danger.is-plain:hover,
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-actions .el-button--danger.is-plain:focus,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-actions .el-button--danger.is-plain:hover,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-actions .el-button--danger.is-plain:focus {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #f87171;
+  color: #fca5a5;
+}
+
+/* 职务树表格行背景（暗色主题） */
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--department > td,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--department > td {
+  background: rgba(30, 41, 59, 0.72) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.12);
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--dept-group > td,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--dept-group > td {
+  background: rgba(30, 41, 59, 0.9) !important;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--position > td,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--position > td {
+  background: rgba(15, 23, 42, 0.55) !important;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--position > td:first-child,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--position > td:first-child {
+  box-shadow: inset 3px 0 0 #60a5fa;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--department:hover > td,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--department:hover > td {
+  background: rgba(51, 65, 85, 0.55) !important;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--dept-group:hover > td,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--dept-group:hover > td {
+  background: rgba(51, 65, 85, 0.75) !important;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--position:hover > td,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions tbody tr.admin-dept-row--position:hover > td {
+  background: rgba(30, 58, 138, 0.22) !important;
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions .admin-dept-pos-code-pill,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions .admin-dept-pos-code-pill {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: rgba(226, 232, 240, 0.9);
+}
+.admin-shell.admin-theme-dark .admin-departments-page .admin-dept-table--positions .admin-dept-type-icon,
+html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positions .admin-dept-type-icon {
+  color: rgba(148, 163, 184, 0.9);
 }
 
 .admin-menu-icon-cell {
@@ -1333,4 +1420,77 @@ html[data-admin-theme='dark'] .admin-users-page .admin-user-org-cell .el-tag:not
 html[data-admin-theme='dark'] .admin-users-page .admin-user-org-cell .el-tag:not(.el-tag--info) .el-tag__close:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+}
+
+/* 当下状态胶囊（与考勤汇总标签配色一致） */
+.admin-presence-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.admin-presence-pill--present {
+  color: #52c41a;
+  background-color: #f6ffed;
+  border-color: #b7eb8f;
+}
+.admin-presence-pill--out {
+  color: #faad14;
+  background-color: #fffbe6;
+  border-color: #ffe58f;
+}
+.admin-presence-pill--off {
+  color: #1890ff;
+  background-color: #e6f7ff;
+  border-color: #91d5ff;
+}
+.admin-presence-pill--absent {
+  color: #8c8c8c;
+  background-color: #f5f5f5;
+  border-color: #d9d9d9;
+}
+.admin-presence-pill--muted {
+  color: #909399;
+  background: transparent;
+  border-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.admin-presence-pill[title]:not([title='']) {
+  cursor: help;
+}
+
+.admin-shell.admin-theme-dark .admin-users-page .admin-presence-pill--present,
+html[data-admin-theme='dark'] .admin-users-page .admin-presence-pill--present {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(74, 222, 128, 0.45);
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-presence-pill--out,
+html[data-admin-theme='dark'] .admin-users-page .admin-presence-pill--out {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-presence-pill--off,
+html[data-admin-theme='dark'] .admin-users-page .admin-presence-pill--off {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(96, 165, 250, 0.45);
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-presence-pill--absent,
+html[data-admin-theme='dark'] .admin-users-page .admin-presence-pill--absent {
+  color: rgba(148, 163, 184, 0.95);
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+.admin-shell.admin-theme-dark .admin-users-page .admin-presence-pill--muted,
+html[data-admin-theme='dark'] .admin-users-page .admin-presence-pill--muted {
+  color: rgba(148, 163, 184, 0.85);
 }

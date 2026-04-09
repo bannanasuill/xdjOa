@@ -70,9 +70,33 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="门店" min-width="168" class-name="admin-users-col-stores">
+          <template slot-scope="{ row }">
+            <div v-if="row.stores && row.stores.length" class="admin-user-org-line">
+              <el-tag
+                v-for="s in row.stores"
+                :key="'us-' + s.id"
+                size="mini"
+                :type="s.is_main ? 'warning' : 'info'"
+                class="admin-user-org-tag"
+              >
+                {{ s.store_name || s.store_code || '#' + s.store_id }}{{ s.is_main ? '·主店' : '' }}
+              </el-tag>
+            </div>
+            <span v-else class="admin-users-op-empty">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="创建时间" width="158">
           <template slot-scope="{ row }">
             {{ formatTs(row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="当下状态" min-width="100" align="center">
+          <template slot-scope="{ row }">
+            <span
+              :class="row.presence_today_class || 'admin-presence-pill admin-presence-pill--muted'"
+              :title="row.presence_today_title || null"
+            >{{ row.presence_today }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="108" align="center" fixed="right">
@@ -89,11 +113,12 @@
             <span v-else>{{ row.status === 1 ? '启用' : '禁用' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="300" fixed="right" class-name="admin-users-col-actions">
+        <el-table-column label="操作" width="400" fixed="right" class-name="admin-users-col-actions">
           <template slot-scope="{ row }">
             <template v-if="!row.is_super_admin && $canPerm('perm.admin.api.users.update')">
               <el-button size="mini" class="admin-mr-6" @click="openRoleAssign(row)">分配角色</el-button>
               <el-button size="mini" class="admin-mr-6" @click="openOrgAssign(row)">分配职务</el-button>
+              <el-button size="mini" class="admin-mr-6" @click="openStoreAssign(row)">分配店铺</el-button>
               <el-button size="mini" @click="openEdit(row)">编辑</el-button>
             </template>
             <span v-else class="admin-users-op-empty">—</span>
@@ -209,6 +234,71 @@
       </span>
     </el-dialog>
 
+    <el-dialog
+      :title="storeAssignTitle"
+      :visible.sync="storeAssignVisible"
+      width="760px"
+      top="6vh"
+      :close-on-click-modal="false"
+      custom-class="admin-users-store-dialog"
+      @closed="onStoreAssignClosed"
+    >
+      <p class="admin-users-role-hint">
+        可分配多个门店；每人须恰好一个「主门店」，其余为支援。每行选择门店与在该门店担任的职务，并设置任职起止日期。
+      </p>
+      <div class="admin-users-store-toolbar">
+        <el-button type="primary" plain size="small" @click="addStoreAssignRow">添加门店</el-button>
+      </div>
+      <el-table :data="storeAssignRows" size="mini" border class="admin-users-store-table" empty-text="点击下方添加门店">
+        <el-table-column label="门店" min-width="200">
+          <template slot-scope="{ row }">
+            <el-select v-model="row.store_id" filterable clearable placeholder="选择门店" class="admin-w-full">
+              <el-option v-for="s in storeOptions" :key="s.id" :label="storeOptionLabel(s)" :value="s.id" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="职务" min-width="200">
+          <template slot-scope="{ row }">
+            <el-select v-model="row.position_id" filterable clearable placeholder="选择职务" class="admin-w-full">
+              <el-option
+                v-for="p in storePositionOptions"
+                :key="p.id"
+                :label="orgPositionOptionLabel(p)"
+                :value="p.id"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="主门店" width="88" align="center">
+          <template slot-scope="{ row }">
+            <el-switch
+              :value="row.is_main === 1"
+              @change="(on) => onStoreMainChange(row, on)"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="生效" width="128">
+          <template slot-scope="{ row }">
+            <el-date-picker v-model="row.start_date" type="date" value-format="yyyy-MM-dd" placeholder="生效日" size="mini" class="admin-w-full" />
+          </template>
+        </el-table-column>
+        <el-table-column label="失效" width="128">
+          <template slot-scope="{ row }">
+            <el-date-picker v-model="row.end_date" type="date" value-format="yyyy-MM-dd" placeholder="失效日" size="mini" class="admin-w-full" />
+          </template>
+        </el-table-column>
+        <el-table-column label="" width="56" align="center">
+          <template slot-scope="{ $index }">
+            <el-button type="danger" plain icon="el-icon-delete" circle size="mini" @click="removeStoreAssignRow($index)" />
+          </template>
+        </el-table-column>
+      </el-table>
+      <span slot="footer" class="admin-dialog-footer">
+        <el-button size="small" @click="storeAssignVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="storeAssignSaving" @click="submitStoreAssign">保存</el-button>
+      </span>
+    </el-dialog>
+
     <el-dialog :visible.sync="remarkVisible" width="420px">
       <div style="font-weight:600; margin-bottom:10px;">{{ remarkTitle }}</div>
       <el-input
@@ -264,6 +354,13 @@ export default {
       orgAssignPositionIds: [],
       orgPositionOptions: [],
       orgAssignSaving: false,
+
+      storeAssignVisible: false,
+      storeAssignTarget: null,
+      storeAssignRows: [],
+      storeOptions: [],
+      storePositionOptions: [],
+      storeAssignSaving: false,
     };
   },
   computed: {
@@ -274,6 +371,10 @@ export default {
     roleAssignTitle() {
       const a = this.roleAssignTarget && this.roleAssignTarget.real_name;
       return a ? `分配角色 — ${a}` : '分配角色';
+    },
+    storeAssignTitle() {
+      const a = this.storeAssignTarget && this.storeAssignTarget.real_name;
+      return a ? `分配店铺 — ${a}` : '分配店铺';
     },
     remarkTitle() {
       return this.remarkNextStatus === 0 ? '禁用备注' : '启用备注';
@@ -457,6 +558,153 @@ export default {
         this.$message.error(msg);
       } finally {
         this.orgAssignSaving = false;
+      }
+    },
+    assignDateToday() {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    },
+    storeOptionLabel(s) {
+      if (!s) return '';
+      const name = (s.name || '').trim();
+      const code = (s.code || '').trim();
+      if (code && name) return `${name}（${code}）`;
+      return name || code || `#${s.id}`;
+    },
+    async loadStoreAssignmentOptions() {
+      try {
+        const { data } = await window.axios.get('/admin/api/users/store-assignment-options');
+        const pack = data.data || {};
+        this.storeOptions = pack.stores || [];
+        this.storePositionOptions = pack.positions || [];
+      } catch (e) {
+        this.storeOptions = [];
+        this.storePositionOptions = [];
+        if (e?.response?.status !== 403) {
+          this.$message.error(e?.response?.data?.message || '加载门店/职务失败');
+        }
+      }
+    },
+    addStoreAssignRow() {
+      const isFirst = !this.storeAssignRows.length;
+      this.storeAssignRows.push({
+        store_id: null,
+        position_id: null,
+        is_main: isFirst ? 1 : 0,
+        start_date: this.assignDateToday(),
+        end_date: '9999-12-31',
+      });
+    },
+    removeStoreAssignRow(index) {
+      this.storeAssignRows.splice(index, 1);
+      if (this.storeAssignRows.length === 1) {
+        this.storeAssignRows[0].is_main = 1;
+      } else if (this.storeAssignRows.length && !this.storeAssignRows.some((r) => r.is_main === 1)) {
+        this.storeAssignRows[0].is_main = 1;
+      }
+    },
+    onStoreMainChange(row, on) {
+      if (on) {
+        this.storeAssignRows.forEach((r) => {
+          r.is_main = r === row ? 1 : 0;
+        });
+        return;
+      }
+      const hadOthers = this.storeAssignRows.some((r) => r !== row && r.is_main === 1);
+      if (!hadOthers && this.storeAssignRows.length > 0) {
+        this.$message.warning('须保留一个主门店');
+        row.is_main = 1;
+      } else {
+        row.is_main = 0;
+      }
+    },
+    openStoreAssign(row) {
+      if (!row || row.is_super_admin) return;
+      if (!this.$canPerm('perm.admin.api.users.update')) return;
+      this.storeAssignTarget = row;
+      this.storeAssignRows = [];
+      this.storeAssignVisible = true;
+      this.loadStoreAssignmentOptions();
+      this.loadUserStoreAssignRows(row.id);
+    },
+    async loadUserStoreAssignRows(userId) {
+      try {
+        const { data } = await window.axios.get(`/admin/api/users/${userId}/stores`);
+        const list = data.data || [];
+        this.storeAssignRows = list.map((s) => ({
+          store_id: s.store_id != null ? Number(s.store_id) : null,
+          position_id: s.position_id != null ? Number(s.position_id) : null,
+          is_main: s.is_main ? 1 : 0,
+          start_date: s.start_date || this.assignDateToday(),
+          end_date: s.end_date || '9999-12-31',
+        }));
+        if (!this.storeAssignRows.length) {
+          this.addStoreAssignRow();
+        }
+      } catch (e) {
+        this.storeAssignRows = [];
+        this.addStoreAssignRow();
+        if (e?.response?.status !== 403) {
+          this.$message.error(e?.response?.data?.message || '加载门店分配失败');
+        }
+      }
+    },
+    onStoreAssignClosed() {
+      this.storeAssignTarget = null;
+      this.storeAssignRows = [];
+    },
+    async submitStoreAssign() {
+      if (!this.storeAssignTarget) return;
+      const rows = this.storeAssignRows.filter((r) => r.store_id != null && r.position_id != null);
+      if (rows.length !== this.storeAssignRows.length) {
+        this.$message.warning('请完整选择每行的门店与职务，或删除空行');
+        return;
+      }
+      if (rows.length === 0) {
+        this.storeAssignSaving = true;
+        try {
+          await window.axios.put(`/admin/api/users/${this.storeAssignTarget.id}/stores`, { assignments: [] });
+          this.$message.success('已清空门店分配');
+          this.storeAssignVisible = false;
+          this.fetchUsers(this.meta.current_page);
+        } catch (e) {
+          const msg =
+            e?.response?.data?.message ||
+            (e?.response?.data?.errors ? Object.values(e.response.data.errors).flat().filter(Boolean).join('；') : null) ||
+            '保存失败';
+          this.$message.error(msg);
+        } finally {
+          this.storeAssignSaving = false;
+        }
+        return;
+      }
+      const mainCnt = rows.filter((r) => r.is_main === 1).length;
+      if (mainCnt !== 1) {
+        this.$message.warning('须且仅能指定一个主门店');
+        return;
+      }
+      const assignments = rows.map((r) => ({
+        store_id: Number(r.store_id),
+        position_id: Number(r.position_id),
+        is_main: r.is_main === 1 ? 1 : 0,
+        start_date: r.start_date,
+        end_date: r.end_date || '9999-12-31',
+      }));
+      this.storeAssignSaving = true;
+      try {
+        await window.axios.put(`/admin/api/users/${this.storeAssignTarget.id}/stores`, { assignments });
+        this.$message.success('门店分配已更新');
+        this.storeAssignVisible = false;
+        this.fetchUsers(this.meta.current_page);
+      } catch (e) {
+        const msg =
+          e?.response?.data?.message ||
+          (e?.response?.data?.errors ? Object.values(e.response.data.errors).flat().filter(Boolean).join('；') : null) ||
+          '保存失败';
+        this.$message.error(msg);
+      } finally {
+        this.storeAssignSaving = false;
       }
     },
     async submitForm() {

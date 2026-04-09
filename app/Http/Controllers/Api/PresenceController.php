@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\AttendanceArrivalChecker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ class PresenceController extends Controller
 
     public function arrival(Request $request): JsonResponse
     {
-        $validated = $this->validateLocation($request);
+        $validated = $this->validateArrivalPayload($request);
         if ($validated instanceof JsonResponse) {
             return $validated;
         }
@@ -31,6 +32,28 @@ class PresenceController extends Controller
         $latest = $this->latestValidRecord((int) $user->id);
         if ($latest !== null && $latest->end_at !== null && $now <= (int) $latest->end_at) {
             return $this->fail(1007, '时间冲突，请稍后再试');
+        }
+
+        $lon = array_key_exists('longitude', $validated) ? $validated['longitude'] : null;
+        $lat = array_key_exists('latitude', $validated) ? $validated['latitude'] : null;
+        $lonF = $lon !== null ? (float) $lon : null;
+        $latF = $lat !== null ? (float) $lat : null;
+        $storeId = isset($validated['store_id']) ? (int) $validated['store_id'] : null;
+        if ($storeId !== null && $storeId < 1) {
+            $storeId = null;
+        }
+        $photo = $validated['photo'] ?? null;
+
+        $gate = app(AttendanceArrivalChecker::class)->verify(
+            $user,
+            $now,
+            $lonF,
+            $latF,
+            $storeId,
+            is_string($photo) ? $photo : null,
+        );
+        if ($gate['ok'] !== true) {
+            return $this->fail((int) $gate['code'], (string) $gate['message']);
         }
 
         $data = [
@@ -254,12 +277,14 @@ class PresenceController extends Controller
         return $this->ok('下班成功', ['id' => $createdId]);
     }
 
-    private function validateLocation(Request $request): array|JsonResponse
+    private function validateArrivalPayload(Request $request): array|JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'address' => ['nullable', 'string', 'max:255'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'store_id' => ['nullable', 'integer', 'min:1'],
+            'photo' => ['nullable', 'string', 'max:65535'],
         ]);
         if ($validator->fails()) {
             return $this->fail(1003, $validator->errors()->first() ?: '参数校验失败');

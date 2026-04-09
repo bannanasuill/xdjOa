@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\AttendanceRuleModel;
 use App\Models\ExpenseTemplateModel;
 use App\Models\DepartmentModel;
 use App\Models\PositionModel;
+use App\Models\StoreModel;
 use App\Models\MenuModel;
 use App\Models\PermissionModel;
 use App\Models\RoleModel;
@@ -57,6 +59,14 @@ class RouteServiceProvider extends ServiceProvider
 
         Route::bind('position', function (string $value) {
             return PositionModel::query()->whereKey($value)->firstOrFail();
+        });
+
+        Route::bind('store', function (string $value) {
+            return StoreModel::query()->whereKey($value)->firstOrFail();
+        });
+
+        Route::bind('attendanceRule', function (string $value) {
+            return AttendanceRuleModel::query()->whereKey($value)->firstOrFail();
         });
 
         RateLimiter::for('api', function (Request $request) {

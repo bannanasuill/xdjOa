@@ -583,6 +583,172 @@ class UserModel extends Authenticatable
     }
 
     /**
+     * 批量用户 id → 门店任职（列表展示用）。
+     *
+     * @param  array<int, int>  $userIds
+     * @return array<int, list<array{id:int, store_id:int, store_name:string, store_code:string, position_id:int, position_name:string, dept_name:string, is_main:int, start_date:string, end_date:string}>>
+     */
+    public static function userStoresMapForUserIds(array $userIds): array
+    {
+        $userIds = array_values(array_filter(array_map('intval', $userIds)));
+        $base = [];
+        foreach ($userIds as $uid) {
+            $base[$uid] = [];
+        }
+        if ($userIds === []) {
+            return [];
+        }
+
+        $tUs = 'user_stores';
+        $tS = 'stores';
+        $tP = 'positions';
+        $tD = 'departments';
+        if (! Schema::hasTable($tUs) || ! Schema::hasTable($tS) || ! Schema::hasTable($tP)) {
+            return $base;
+        }
+
+        $deptJoin = Schema::hasTable($tD);
+        $q = DB::table($tUs.' as us')
+            ->join($tS.' as s', 's.id', '=', 'us.store_id')
+            ->join($tP.' as p', 'p.id', '=', 'us.position_id')
+            ->whereIn('us.user_id', $userIds)
+            ->orderByDesc('us.is_main')
+            ->orderBy('us.id')
+            ->select([
+                'us.user_id as user_id',
+                'us.id as assignment_id',
+                'us.store_id as store_id',
+                'us.position_id as position_id',
+                'us.is_main as is_main',
+                'us.start_date as start_date',
+                'us.end_date as end_date',
+                's.name as store_name',
+                's.code as store_code',
+                'p.name as position_name',
+            ]);
+        if ($deptJoin) {
+            $q->addSelect('d.name as dept_name')
+                ->leftJoin($tD.' as d', 'd.id', '=', 'p.dept_id');
+        }
+        foreach ($q->get() as $r) {
+            $uid = (int) ($r->user_id ?? 0);
+            if ($uid <= 0 || ! isset($base[$uid])) {
+                continue;
+            }
+            $sd = $r->start_date ?? '';
+            $ed = $r->end_date ?? '';
+            $base[$uid][] = [
+                'id' => (int) ($r->assignment_id ?? 0),
+                'store_id' => (int) ($r->store_id ?? 0),
+                'store_name' => trim((string) ($r->store_name ?? '')),
+                'store_code' => trim((string) ($r->store_code ?? '')),
+                'position_id' => (int) ($r->position_id ?? 0),
+                'position_name' => trim((string) ($r->position_name ?? '')),
+                'dept_name' => $deptJoin ? trim((string) ($r->dept_name ?? '')) : '',
+                'is_main' => (int) ($r->is_main ?? 0),
+                'start_date' => is_string($sd) ? substr($sd, 0, 10) : (string) $sd,
+                'end_date' => is_string($ed) ? substr($ed, 0, 10) : (string) $ed,
+            ];
+        }
+
+        return $base;
+    }
+
+    /**
+     * 小程序可打卡地点：当日有效的门店任职 + 门店坐标/半径（与 POST /api/presence/arrival 中 store_id 对应）。
+     *
+     * @return list<array{
+     *     assignment_id:int,
+     *     store_id:int,
+     *     store_name:string,
+     *     store_code:string,
+     *     store_type:int,
+     *     address:string,
+     *     longitude: ?string,
+     *     latitude: ?string,
+     *     radius:int,
+     *     has_location:bool,
+     *     position_id:int,
+     *     position_name:string,
+     *     dept_name:string,
+     *     is_main:int
+     * }>
+     */
+    public static function apiClockInPlacesForUserId(int $userId, ?string $workDate = null): array
+    {
+        if ($userId < 1) {
+            return [];
+        }
+
+        $workDate = $workDate !== null && $workDate !== '' ? substr($workDate, 0, 10) : date('Y-m-d');
+
+        $tUs = 'user_stores';
+        $tS = 'stores';
+        $tP = 'positions';
+        $tD = 'departments';
+        if (! Schema::hasTable($tUs) || ! Schema::hasTable($tS) || ! Schema::hasTable($tP)) {
+            return [];
+        }
+
+        $deptJoin = Schema::hasTable($tD);
+        $q = DB::table($tUs.' as us')
+            ->join($tS.' as s', 's.id', '=', 'us.store_id')
+            ->join($tP.' as p', 'p.id', '=', 'us.position_id')
+            ->where('us.user_id', $userId)
+            ->whereDate('us.start_date', '<=', $workDate)
+            ->whereDate('us.end_date', '>=', $workDate)
+            ->where('s.status', 1)
+            ->where('p.status', 1)
+            ->orderByDesc('us.is_main')
+            ->orderBy('us.id')
+            ->select([
+                'us.id as assignment_id',
+                'us.store_id as store_id',
+                'us.position_id as position_id',
+                'us.is_main as is_main',
+                's.name as store_name',
+                's.code as store_code',
+                's.store_type as store_type',
+                's.address as store_address',
+                's.longitude as store_longitude',
+                's.latitude as store_latitude',
+                's.radius as store_radius',
+                'p.name as position_name',
+            ]);
+        if ($deptJoin) {
+            $q->addSelect('d.name as dept_name')
+                ->leftJoin($tD.' as d', 'd.id', '=', 'p.dept_id');
+        }
+
+        $out = [];
+        foreach ($q->get() as $r) {
+            $lon = $r->store_longitude ?? null;
+            $lat = $r->store_latitude ?? null;
+            $lonS = $lon !== null && $lon !== '' ? trim((string) $lon) : '';
+            $latS = $lat !== null && $lat !== '' ? trim((string) $lat) : '';
+            $hasLoc = $lonS !== '' && $latS !== '';
+            $out[] = [
+                'assignment_id' => (int) ($r->assignment_id ?? 0),
+                'store_id' => (int) ($r->store_id ?? 0),
+                'store_name' => trim((string) ($r->store_name ?? '')),
+                'store_code' => trim((string) ($r->store_code ?? '')),
+                'store_type' => (int) ($r->store_type ?? 1),
+                'address' => trim((string) ($r->store_address ?? '')),
+                'longitude' => $hasLoc ? $lonS : null,
+                'latitude' => $hasLoc ? $latS : null,
+                'radius' => max(1, (int) ($r->store_radius ?? 100)),
+                'has_location' => $hasLoc,
+                'position_id' => (int) ($r->position_id ?? 0),
+                'position_name' => trim((string) ($r->position_name ?? '')),
+                'dept_name' => ($deptJoin && isset($r->dept_name)) ? trim((string) $r->dept_name) : '',
+                'is_main' => (int) ($r->is_main ?? 0),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * 全量覆盖用户的部门、职务关联（与后台分配接口配合校验后调用）。
      *
      * @param  array<int, int|string>  $deptIds
@@ -643,18 +809,151 @@ class UserModel extends Authenticatable
         $userIds = array_map(static fn ($u) => (int) ($u->id ?? 0), $items);
         $rolesMap = static::rolesMapForUserIds($userIds);
         $orgMap = static::orgMapForUserIds($userIds);
+        $storesMap = Schema::hasTable('user_stores') ? static::userStoresMapForUserIds($userIds) : [];
+        $presenceMeta = static::presenceTodayMetaMapForUserIds($userIds);
 
-        $data = array_map(function ($u) use ($rolesMap, $orgMap) {
+        $data = array_map(function ($u) use ($rolesMap, $orgMap, $storesMap, $presenceMeta) {
             $uid = (int) ($u->id ?? 0);
             $row = $u->toArray();
             $row['roles'] = $rolesMap[$uid] ?? [];
             $row['departments'] = $orgMap[$uid]['departments'] ?? [];
             $row['positions'] = $orgMap[$uid]['positions'] ?? [];
+            $row['stores'] = $storesMap[$uid] ?? [];
             $row['is_super_admin'] = $u->isSuperAdminAccount();
+            $meta = $presenceMeta[$uid] ?? ['label' => '—', 'out_reason' => null];
+            $presenceLabel = $meta['label'];
+            $row['presence_today'] = $presenceLabel;
+            $row['presence_today_class'] = static::presenceTodayPillClass($presenceLabel);
+            $row['presence_today_title'] = static::presenceTodayHoverTitle($presenceLabel, $meta['out_reason'] ?? null);
 
             return $row;
         }, $items);
 
         return ['data' => $data, 'paginator' => $paginator];
+    }
+
+    /**
+     * 今日当下状态文案（基于 user_presence_records，逻辑表名，带连接前缀）。
+     *
+     * @param  array<int, int>  $userIds
+     * @return array<int, string>
+     */
+    public static function presenceTodayStatusMapForUserIds(array $userIds): array
+    {
+        $meta = static::presenceTodayMetaMapForUserIds($userIds);
+        $out = [];
+        foreach ($meta as $uid => $row) {
+            $out[$uid] = $row['label'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * 今日当下状态：展示文案 + 当前外出原因（未外出时为 null）。
+     *
+     * @param  array<int, int>  $userIds
+     * @return array<int, array{label: string, out_reason: string|null}>
+     */
+    public static function presenceTodayMetaMapForUserIds(array $userIds): array
+    {
+        $userIds = array_values(array_filter(array_map('intval', $userIds)));
+        if ($userIds === []) {
+            return [];
+        }
+
+        $empty = ['label' => '—', 'out_reason' => null];
+        $t = 'user_presence_records';
+        if (! Schema::hasTable($t)) {
+            return array_fill_keys($userIds, $empty);
+        }
+
+        $today = date('Y-m-d');
+        $rows = DB::table($t)
+            ->whereIn('user_id', $userIds)
+            ->where('work_date', $today)
+            ->where('status', 1)
+            ->orderBy('user_id')
+            ->orderBy('start_at')
+            ->orderBy('id')
+            ->get(['user_id', 'record_type', 'start_at', 'end_at', 'reason']);
+
+        $byUser = [];
+        foreach ($rows as $r) {
+            $uid = (int) ($r->user_id ?? 0);
+            if ($uid <= 0) {
+                continue;
+            }
+            if (! isset($byUser[$uid])) {
+                $byUser[$uid] = [];
+            }
+            $byUser[$uid][] = $r;
+        }
+
+        $out = [];
+        foreach ($userIds as $uid) {
+            $out[$uid] = static::presenceTodayMetaFromRecords($byUser[$uid] ?? []);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<object>  $recs
+     * @return array{label: string, out_reason: string|null}
+     */
+    protected static function presenceTodayMetaFromRecords(array $recs): array
+    {
+        if ($recs === []) {
+            return ['label' => '未到岗', 'out_reason' => null];
+        }
+
+        foreach ($recs as $r) {
+            $type = (int) ($r->record_type ?? 0);
+            $endAt = $r->end_at ?? null;
+            if ($type === 2 && ($endAt === null || $endAt === '')) {
+                $reason = isset($r->reason) ? trim((string) $r->reason) : '';
+
+                return ['label' => '外出', 'out_reason' => $reason !== '' ? $reason : null];
+            }
+        }
+
+        $last = $recs[count($recs) - 1];
+        $t = (int) ($last->record_type ?? 0);
+        if ($t === 3) {
+            return ['label' => '下班', 'out_reason' => null];
+        }
+        if ($t === 2) {
+            return ['label' => '到岗', 'out_reason' => null];
+        }
+        if ($t === 1) {
+            return ['label' => '到岗', 'out_reason' => null];
+        }
+
+        return ['label' => '—', 'out_reason' => null];
+    }
+
+    public static function presenceTodayHoverTitle(string $label, ?string $outReason): string
+    {
+        if ($label !== '外出') {
+            return '';
+        }
+        $r = $outReason !== null ? trim($outReason) : '';
+
+        return $r !== '' ? $r : '暂无外出说明';
+    }
+
+    /**
+     * 与 resources/css/admin-spa.css、public/css/admin-layout.css 中 .admin-presence-pill 修饰符对应。
+     */
+    public static function presenceTodayPillClass(string $label): string
+    {
+        return match ($label) {
+            '未到岗' => 'admin-presence-pill admin-presence-pill--absent',
+            '到岗' => 'admin-presence-pill admin-presence-pill--present',
+            '外出' => 'admin-presence-pill admin-presence-pill--out',
+            '下班' => 'admin-presence-pill admin-presence-pill--off',
+            default => 'admin-presence-pill admin-presence-pill--muted',
+        };
     }
 }

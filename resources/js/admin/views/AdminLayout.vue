@@ -72,7 +72,7 @@
       </el-header>
       <el-main class="admin-main">
         <div class="admin-content">
-          <router-view />
+          <router-view :key="$route.fullPath" />
         </div>
       </el-main>
     </el-container>
@@ -133,6 +133,8 @@ export default {
     pageTitle() {
       if (this.$route.name === 'admin.users') return '用户';
       if (this.$route.name === 'admin.departments') return '部门与职务';
+      if (this.$route.name === 'admin.stores') return '店铺管理';
+      if (this.$route.name === 'admin.attendance_rules') return '考勤规则';
       if (this.$route.name === 'admin.logs') return '日志管理';
       if (this.$route.name === 'admin.menus') return '菜单管理';
       if (this.$route.name === 'admin.permissions') return '权限管理';
@@ -323,6 +325,8 @@ export default {
       if (p.includes('/roles') || name.includes('角色')) return 'el-icon-collection';
       if (p.includes('/settings') || name.includes('系统配置')) return 'el-icon-setting';
       if (p.includes('/expense') || name.includes('报销')) return 'el-icon-s-order';
+      if (p.includes('/stores') || name.includes('店铺')) return 'el-icon-location-outline';
+      if (p.includes('attendance') || name.includes('考勤')) return 'el-icon-time';
       if (p.includes('/admin') || name.includes('首页')) return 'el-icon-house';
       return 'el-icon-menu';
     },

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ApiService;
+use App\Http\Controllers\Admin\AttendanceRuleService;
 use App\Http\Controllers\Admin\AuthService;
 use App\Http\Controllers\Admin\DashboardService;
 use App\Http\Controllers\Admin\ExpenseTemplateService;
@@ -8,6 +9,7 @@ use App\Http\Controllers\Admin\ExpenseWorkflowService;
 use App\Http\Controllers\Admin\MenuService;
 use App\Http\Controllers\Admin\PermissionService;
 use App\Http\Controllers\Admin\DepartmentService;
+use App\Http\Controllers\Admin\StoreService;
 use App\Http\Controllers\Admin\PositionService;
 use App\Http\Controllers\Admin\RoleService;
 use App\Http\Controllers\Admin\SystemConfigService;
@@ -53,6 +55,9 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
         Route::get('/users/org-options', [UserService::class, 'apiOrgOptions'])
             ->middleware('admin.perm:perm.admin.api.users.update')
             ->name('admin.api.users.org-options');
+        Route::get('/users/store-assignment-options', [UserService::class, 'apiStoreAssignmentOptions'])
+            ->middleware('admin.perm:perm.admin.api.users.update')
+            ->name('admin.api.users.store-assignment-options');
 
         Route::get('/users', [UserService::class, 'apiIndex'])
             ->middleware('admin.perm:perm.admin.api.users.index')
@@ -69,6 +74,12 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
         Route::patch('/users/{adminUser}/org', [UserService::class, 'apiSyncOrg'])
             ->middleware('admin.perm:perm.admin.api.users.update')
             ->name('admin.api.users.org');
+        Route::get('/users/{adminUser}/stores', [UserService::class, 'apiUserStores'])
+            ->middleware('admin.perm:perm.admin.api.users.update')
+            ->name('admin.api.users.stores');
+        Route::put('/users/{adminUser}/stores', [UserService::class, 'apiUserStoresSync'])
+            ->middleware('admin.perm:perm.admin.api.users.update')
+            ->name('admin.api.users.stores.sync');
         Route::patch('/users/{adminUser}/status', [UserService::class, 'apiUpdateStatus'])
             ->middleware('admin.perm:perm.admin.api.users.status')
             ->name('admin.api.users.status');
@@ -182,6 +193,46 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
         Route::delete('/positions/{position}', [PositionService::class, 'apiDestroy'])
             ->middleware('admin.perm:perm.admin.api.positions.destroy')
             ->name('admin.api.positions.destroy');
+
+        Route::get('/stores/dept-options', [StoreService::class, 'apiDeptOptions'])
+            ->middleware('admin.perm:perm.admin.api.stores.dept_options')
+            ->name('admin.api.stores.dept-options');
+        Route::get('/stores', [StoreService::class, 'apiIndex'])
+            ->middleware('admin.perm:perm.admin.api.stores.index')
+            ->name('admin.api.stores.index');
+        Route::post('/stores/geocode', [StoreService::class, 'apiGeocode'])
+            ->name('admin.api.stores.geocode');
+        Route::post('/stores', [StoreService::class, 'apiStore'])
+            ->middleware('admin.perm:perm.admin.api.stores.store')
+            ->name('admin.api.stores.store');
+        Route::put('/stores/{store}', [StoreService::class, 'apiUpdate'])
+            ->middleware('admin.perm:perm.admin.api.stores.update')
+            ->name('admin.api.stores.update');
+        Route::patch('/stores/{store}/status', [StoreService::class, 'apiPatchStatus'])
+            ->middleware('admin.perm:perm.admin.api.stores.status')
+            ->name('admin.api.stores.status');
+        Route::delete('/stores/{store}', [StoreService::class, 'apiDestroy'])
+            ->middleware('admin.perm:perm.admin.api.stores.destroy')
+            ->name('admin.api.stores.destroy');
+
+        Route::get('/attendance-rules/form-options', [AttendanceRuleService::class, 'apiFormOptions'])
+            ->middleware('admin.perm:perm.admin.api.attendance_rules.form_options')
+            ->name('admin.api.attendance-rules.form-options');
+        Route::get('/attendance-rules', [AttendanceRuleService::class, 'apiIndex'])
+            ->middleware('admin.perm:perm.admin.api.attendance_rules.index')
+            ->name('admin.api.attendance-rules.index');
+        Route::post('/attendance-rules', [AttendanceRuleService::class, 'apiStore'])
+            ->middleware('admin.perm:perm.admin.api.attendance_rules.store')
+            ->name('admin.api.attendance-rules.store');
+        Route::put('/attendance-rules/{attendanceRule}', [AttendanceRuleService::class, 'apiUpdate'])
+            ->middleware('admin.perm:perm.admin.api.attendance_rules.update')
+            ->name('admin.api.attendance-rules.update');
+        Route::patch('/attendance-rules/{attendanceRule}/status', [AttendanceRuleService::class, 'apiPatchStatus'])
+            ->middleware('admin.perm:perm.admin.api.attendance_rules.status')
+            ->name('admin.api.attendance-rules.status');
+        Route::delete('/attendance-rules/{attendanceRule}', [AttendanceRuleService::class, 'apiDestroy'])
+            ->middleware('admin.perm:perm.admin.api.attendance_rules.destroy')
+            ->name('admin.api.attendance-rules.destroy');
 
         Route::get('/expense-workflow/default', [ExpenseWorkflowService::class, 'apiDefault'])
             ->middleware('admin.perm:perm.admin.expense.apply')

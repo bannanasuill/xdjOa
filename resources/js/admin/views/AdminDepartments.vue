@@ -1,7 +1,7 @@
 <template>
   <div class="admin-departments-page">
-    <el-card class="admin-mb-12 admin-page-filters">
-      <div class="admin-form-row">
+    <el-card class="admin-mb-12 admin-page-filters admin-dept-toolbar-card">
+      <div class="admin-form-row admin-dept-toolbar-row">
         <el-button size="small" :loading="refreshLoading" @click="refreshAll">刷新</el-button>
         <el-radio-group
           v-if="$canPerm('perm.admin.api.departments.index') || $canPerm('perm.admin.api.positions.index')"
@@ -18,14 +18,22 @@
         </el-radio-group>
         <span class="admin-flex-spacer"></span>
         <el-button
-          v-if="$canPerm('perm.admin.api.departments.store')"
+          v-if="showToolbarAddTopDept"
           type="primary"
           size="small"
-          :disabled="!$canPerm('perm.admin.api.departments.store')"
           title="无「接口：部门新增」权限时不可操作"
           @click="openCreate"
         >
           新增顶级部门
+        </el-button>
+        <el-button
+          v-if="showToolbarAddPosition"
+          type="primary"
+          size="small"
+          title="无「接口：职务新增」权限时不可操作"
+          @click="openPosCreate"
+        >
+          新增职务
         </el-button>
       </div>
     </el-card>
@@ -34,26 +42,31 @@
       <el-table
         ref="adminDataTable"
         class="admin-data-table"
+        :class="{ 'admin-dept-table--positions': isPositionsTreeView }"
         :data="unifiedTree"
         :max-height="adminTableMaxHeight"
         row-key="rowKey"
+        :row-class-name="deptTableRowClassName"
         size="mini"
         v-loading="loading || positionLoading"
         :tree-props="{ children: 'children' }"
+        :indent="treeTableIndent"
+        :empty-text="deptTableEmptyText"
         default-expand-all
       >
-        <el-table-column label="名称" :min-width="showNameInlineEdit ? 220 : 200" fixed="left">
+        <el-table-column label="名称" :min-width="nameColumnMinWidth" fixed="left">
           <template slot-scope="{ row }">
-            <div v-if="row.rowType === 'position'" class="admin-dept-pos-name-stack">
-              <span
-                class="admin-dept-unified-position-name"
-                :title="adminEllipsisTitle(row.name)"
-              >{{ adminEllipsisDisplay(row.name) }}</span>
-              <span
-                v-if="row.code"
-                class="admin-dept-pos-name-stack__code"
-                :title="String(row.code)"
-              >{{ adminEllipsisDisplay(String(row.code)) }}</span>
+            <div v-if="row.rowType === 'position'" class="admin-dept-pos-name-cell">
+              <i class="el-icon-user admin-dept-type-icon" aria-hidden="true" />
+              <div class="admin-dept-pos-name-inline">
+                <span
+                  class="admin-dept-unified-position-name"
+                  :title="adminEllipsisTitle(row.name)"
+                >{{ adminEllipsisDisplay(row.name) }}</span>
+                <code v-if="row.code" class="admin-dept-pos-code-pill" :title="String(row.code)">{{
+                  adminEllipsisDisplay(String(row.code))
+                }}</code>
+              </div>
             </div>
             <el-input
               v-else-if="showNameInlineEdit"
@@ -66,6 +79,30 @@
               @keyup.native.enter="onDeptNameEnter"
             />
             <span
+              v-else-if="row.rowType === 'dept_group'"
+              class="admin-dept-dept-name-cell"
+            >
+              <i class="el-icon-folder admin-dept-type-icon" aria-hidden="true" />
+              <span
+                class="admin-menu-tree-name admin-dept-pos-tree-group-name"
+                :class="{ 'admin-menu-tree-name--expandable': row.children && row.children.length }"
+                :title="adminEllipsisTitle(row.name)"
+                @click.stop="onTreeNameClick(row)"
+              >{{ adminEllipsisDisplay(row.name) }}</span>
+            </span>
+            <span
+              v-else-if="isPositionsTreeView"
+              class="admin-dept-dept-name-cell"
+            >
+              <i class="el-icon-folder-opened admin-dept-type-icon" aria-hidden="true" />
+              <span
+                class="admin-menu-tree-name"
+                :class="{ 'admin-menu-tree-name--expandable': row.children && row.children.length }"
+                :title="adminEllipsisTitle(row.name)"
+                @click.stop="onTreeNameClick(row)"
+              >{{ adminEllipsisDisplay(row.name) }}</span>
+            </span>
+            <span
               v-else
               class="admin-menu-tree-name"
               :class="{ 'admin-menu-tree-name--expandable': row.children && row.children.length }"
@@ -74,17 +111,13 @@
             >{{ adminEllipsisDisplay(row.name) }}</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="showDepartmentMetaColumns" label="类型" width="88" align="center">
+        <el-table-column
+          v-if="!isPositionsTreeView"
+          label="负责人"
+          :min-width="showLeaderInlineAssign ? 200 : 138"
+        >
           <template slot-scope="{ row }">
-            <span v-if="row.rowType !== 'position'">{{ typeLabel(row.type) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="负责人" :min-width="showLeaderInlineAssign ? 200 : 138">
-          <template slot-scope="{ row }">
-            <template v-if="row.rowType === 'position'">
-              <span :title="adminEllipsisTitle(positionDeptLabel(row))">{{ adminEllipsisDisplay(positionDeptLabel(row)) }}</span>
-            </template>
-            <template v-else-if="showLeaderInlineAssign">
+            <template v-if="showLeaderInlineAssign">
               <el-select
                 :value="leaderSelectValue(row)"
                 class="admin-dept-leader-inline"
@@ -120,12 +153,22 @@
             <span v-else-if="row.rowType !== 'position'">{{ row.sort }}</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="showPositionLevelColumn" label="职级" width="72" align="center">
+        <el-table-column
+          v-if="showPositionLevelColumn"
+          label="职级"
+          :width="isPositionsTreeView ? 64 : 72"
+          align="center"
+        >
           <template slot-scope="{ row }">
-            <span v-if="row.rowType === 'position'">{{ row.level }}</span>
+            <span v-if="row.rowType === 'position'" class="admin-dept-pos-level">{{ row.level }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100" align="center" fixed="right">
+        <el-table-column
+          label="状态"
+          :width="isPositionsTreeView ? 88 : 100"
+          align="center"
+          fixed="right"
+        >
           <template slot-scope="{ row }">
             <template v-if="row.rowType === 'position'">
               <el-switch
@@ -138,6 +181,9 @@
                 @change="(on) => patchPosStatus(row, on ? 1 : 0)"
               />
               <span v-else>{{ row.status === 1 ? '启用' : '禁用' }}</span>
+            </template>
+            <template v-else-if="isPositionsTreeView">
+              <span class="admin-dept-cell-empty" aria-hidden="true" />
             </template>
             <template v-else>
               <el-switch
@@ -153,16 +199,23 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="312" width="312" fixed="right" align="left">
+        <el-table-column
+          label="操作"
+          :min-width="opsColumnMinWidth"
+          :width="opsColumnWidth"
+          fixed="right"
+          align="left"
+        >
           <template slot-scope="{ row }">
             <template v-if="row.rowType === 'position'">
-              <div class="admin-dept-actions">
+              <div class="admin-dept-actions" :class="{ 'admin-dept-actions--compact': isPositionsTreeView }">
                 <el-button v-if="$canPerm('perm.admin.api.positions.update')" size="mini" @click="openPosEdit(row)">
                   编辑
                 </el-button>
                 <el-button
                   v-if="$canPerm('perm.admin.api.positions.destroy')"
                   type="danger"
+                  plain
                   size="mini"
                   :disabled="posDeleteBusyId === row.id"
                   @click="confirmDeletePosition(row)"
@@ -171,6 +224,9 @@
                   v-if="!$canPerm('perm.admin.api.positions.update') && !$canPerm('perm.admin.api.positions.destroy')"
                 >—</span>
               </div>
+            </template>
+            <template v-else-if="isPositionsTreeView">
+              <span class="admin-dept-cell-empty" aria-hidden="true" />
             </template>
             <template v-else>
               <div class="admin-dept-actions">
@@ -303,8 +359,6 @@
 
 <script>
 import adminTableFixedHeader from '../mixins/adminTableFixedHeader';
-import { DEPT_TYPE_LABELS } from '../deptTypeLabels';
-
 export default {
   name: 'AdminDepartments',
   mixins: [adminTableFixedHeader],
@@ -363,13 +417,13 @@ export default {
         return this.buildDeptOnlyTree();
       }
       if (this.treeViewMode === 'positions' && canPos) {
-        return this.buildPositionsFlatTree();
+        return this.buildPositionsDeptTree();
       }
       if (canDept) {
         return this.buildDeptOnlyTree();
       }
       if (canPos) {
-        return this.buildPositionsFlatTree();
+        return this.buildPositionsDeptTree();
       }
       return [];
     },
@@ -378,6 +432,43 @@ export default {
     },
     showPositionLevelColumn() {
       return this.treeViewMode === 'positions' && this.$canPerm('perm.admin.api.positions.index');
+    },
+    /** 职务树表格：仅职务行可操作，部门/分组行仅作结构展示 */
+    isPositionsTreeView() {
+      return this.treeViewMode === 'positions' && this.$canPerm('perm.admin.api.positions.index');
+    },
+    nameColumnMinWidth() {
+      if (this.isPositionsTreeView) {
+        return 200;
+      }
+      return this.showNameInlineEdit ? 220 : 200;
+    },
+    opsColumnWidth() {
+      return this.isPositionsTreeView ? 148 : 312;
+    },
+    opsColumnMinWidth() {
+      return this.opsColumnWidth;
+    },
+    /** 职务树层级较深，略加大缩进更易区分部门 / 职务 */
+    treeTableIndent() {
+      return this.isPositionsTreeView ? 28 : 16;
+    },
+    showToolbarAddTopDept() {
+      return this.treeViewMode === 'departments' && this.$canPerm('perm.admin.api.departments.store');
+    },
+    showToolbarAddPosition() {
+      return this.isPositionsTreeView && this.$canPerm('perm.admin.api.positions.store');
+    },
+    deptTableEmptyText() {
+      if (this.isPositionsTreeView) {
+        return '暂无职务，可点击「新增职务」，或切换到「部门」维护组织';
+      }
+      if (this.treeViewMode === 'departments' && this.$canPerm('perm.admin.api.departments.index')) {
+        return this.$canPerm('perm.admin.api.departments.store')
+          ? '暂无部门，可点击「新增顶级部门」'
+          : '暂无部门数据';
+      }
+      return '暂无数据';
     },
     /** 部门列表内联分配负责人（需更新部门 + 负责人候选接口） */
     showLeaderInlineAssign() {
@@ -453,6 +544,18 @@ export default {
     }
   },
   methods: {
+    deptTableRowClassName({ row }) {
+      if (!row) {
+        return '';
+      }
+      if (row.rowType === 'position') {
+        return 'admin-dept-row--position';
+      }
+      if (row.rowType === 'dept_group') {
+        return 'admin-dept-row--dept-group';
+      }
+      return 'admin-dept-row--department';
+    },
     async refreshAll() {
       const tasks = [];
       if (this.$canPerm('perm.admin.api.departments.index')) tasks.push(this.fetchList());
@@ -487,23 +590,185 @@ export default {
       };
       return baseTree.map(merge);
     },
-    /** 仅职务：扁平列表（按部门、职级排序，无树展开） */
-    buildPositionsFlatTree() {
+    /**
+     * 职务视图：按部门树归类。有部门列表权限时，职务挂在对应部门节点下（子部门在前，职务在后）；
+     * 仅职务权限时，按部门合成根分组行。
+     */
+    buildPositionsDeptTree() {
       const positions = this.positionRowsAll || [];
-      const sorted = [...positions].sort(
-        (a, b) =>
-          (Number(a.dept_id) || 0) - (Number(b.dept_id) || 0) ||
-          (Number(b.level) || 0) - (Number(a.level) || 0) ||
-          (Number(b.id) || 0) - (Number(a.id) || 0)
-      );
-      return sorted.map((p) => ({
-        rowKey: `p-${p.id}`,
-        rowType: 'position',
-        ...p,
-      }));
+      const sortPos = (a, b) =>
+        (Number(b.level) || 0) - (Number(a.level) || 0) ||
+        (Number(b.id) || 0) - (Number(a.id) || 0);
+
+      const canDeptIndex = this.$canPerm('perm.admin.api.departments.index');
+      if (canDeptIndex && this.rows && this.rows.length) {
+        if (!positions.length) {
+          return [];
+        }
+        const byDept = new Map();
+        positions.forEach((p) => {
+          const did = Number(p.dept_id) || 0;
+          if (!byDept.has(did)) {
+            byDept.set(did, []);
+          }
+          byDept.get(did).push(p);
+        });
+        byDept.forEach((list) => list.sort(sortPos));
+
+        const attach = (node) => {
+          const subDepts = (node.children || []).map(attach);
+          const posList = byDept.get(Number(node.id)) || [];
+          const posNodes = posList.map((p) => ({
+            rowKey: `p-${p.id}`,
+            rowType: 'position',
+            ...p,
+          }));
+          const merged = [...subDepts, ...posNodes];
+          if (merged.length) {
+            node.children = merged;
+          } else {
+            delete node.children;
+          }
+          return node;
+        };
+        const tree = this.buildDeptOnlyTree().map(attach);
+
+        const placedPosIds = new Set();
+        const collectPlaced = (nodes) => {
+          (nodes || []).forEach((n) => {
+            if (n.rowType === 'position') {
+              placedPosIds.add(n.id);
+            } else if (n.children && n.children.length) {
+              collectPlaced(n.children);
+            }
+          });
+        };
+        collectPlaced(tree);
+
+        const orphanByDept = new Map();
+        positions.forEach((p) => {
+          if (placedPosIds.has(p.id)) {
+            return;
+          }
+          const did = Number(p.dept_id) || 0;
+          if (!orphanByDept.has(did)) {
+            const dn = p.dept_name != null ? String(p.dept_name).trim() : '';
+            orphanByDept.set(did, { dept_id: did, dept_name: dn, items: [] });
+          }
+          orphanByDept.get(did).items.push(p);
+        });
+        if (orphanByDept.size) {
+          const extra = Array.from(orphanByDept.values())
+            .sort((a, b) => {
+              const an = a.dept_name || '';
+              const bn = b.dept_name || '';
+              if (an !== bn) {
+                return an.localeCompare(bn, 'zh-Hans-CN');
+              }
+              return (a.dept_id || 0) - (b.dept_id || 0);
+            })
+            .map((g) => {
+              g.items.sort(sortPos);
+              const children = g.items.map((p) => ({
+                rowKey: `p-${p.id}`,
+                rowType: 'position',
+                ...p,
+              }));
+              const label =
+                g.dept_name || (g.dept_id > 0 ? `部门 #${g.dept_id}（未在树中）` : '未分配部门');
+              return {
+                rowKey: `dg-o-${g.dept_id}`,
+                rowType: 'dept_group',
+                id: g.dept_id > 0 ? g.dept_id : null,
+                name: label,
+                children,
+              };
+            });
+          tree.push(...extra);
+        }
+
+        const pruned = tree
+          .map((n) => this.pruneDeptBranchForPositions(n))
+          .filter(Boolean);
+        return pruned;
+      }
+
+      if (!positions.length) {
+        return [];
+      }
+      const byDept = new Map();
+      positions.forEach((p) => {
+        const did = Number(p.dept_id) || 0;
+        if (!byDept.has(did)) {
+          const dn = p.dept_name != null ? String(p.dept_name).trim() : '';
+          byDept.set(did, { dept_id: did, dept_name: dn, items: [] });
+        }
+        byDept.get(did).items.push(p);
+      });
+      const groups = Array.from(byDept.values()).sort((a, b) => {
+        const an = a.dept_name || '';
+        const bn = b.dept_name || '';
+        if (an !== bn) {
+          return an.localeCompare(bn, 'zh-Hans-CN');
+        }
+        return (a.dept_id || 0) - (b.dept_id || 0);
+      });
+      return groups.map((g) => {
+        g.items.sort(sortPos);
+        const children = g.items.map((p) => ({
+          rowKey: `p-${p.id}`,
+          rowType: 'position',
+          ...p,
+        }));
+        const label =
+          g.dept_name || (g.dept_id > 0 ? `部门 #${g.dept_id}` : '未分配部门');
+        return {
+          rowKey: `dg-${g.dept_id}`,
+          rowType: 'dept_group',
+          id: g.dept_id > 0 ? g.dept_id : null,
+          name: label,
+          children,
+        };
+      });
     },
-    typeLabel(t) {
-      return DEPT_TYPE_LABELS[t] || t || '—';
+    /**
+     * 职务树：剪掉子树内没有任何职务的部门节点；职务行、dept_group 原样保留。
+     * @returns {object|null}
+     */
+    pruneDeptBranchForPositions(node) {
+      if (!node) {
+        return null;
+      }
+      if (node.rowType === 'position' || node.rowType === 'dept_group') {
+        return node;
+      }
+      const rawKids = node.children || [];
+      const newKids = [];
+      rawKids.forEach((c) => {
+        if (c.rowType === 'position') {
+          newKids.push(c);
+        } else if (c.rowType === 'department') {
+          const sub = this.pruneDeptBranchForPositions(c);
+          if (sub) {
+            newKids.push(sub);
+          }
+        } else if (c.rowType === 'dept_group') {
+          newKids.push(c);
+        }
+      });
+      if (newKids.length === 0) {
+        return null;
+      }
+      const out = { ...node, children: newKids };
+      return out;
+    },
+    /** 仅「按部门分组」时的根行：无有效部门 ID 时不允许在此节点下新增职务 */
+    deptGroupCanAddPosition(row) {
+      if (!row || row.rowType !== 'dept_group') {
+        return true;
+      }
+      const id = row.id != null ? Number(row.id) : NaN;
+      return Number.isFinite(id) && id > 0;
     },
     leaderSelectValue(row) {
       if (!row || row.leader_id == null || row.leader_id === '') {
@@ -513,7 +778,7 @@ export default {
       return Number.isFinite(n) && n > 0 ? n : null;
     },
     buildDepartmentPutPayload(row, patch = {}) {
-      if (!row || row.rowType === 'position') {
+      if (!row || row.rowType === 'position' || row.rowType === 'dept_group') {
         return {};
       }
       const parentId = row.parent_id != null ? Number(row.parent_id) : 0;
@@ -530,14 +795,14 @@ export default {
       );
     },
     onDeptNameFocus(row) {
-      if (!row || row.rowType === 'position' || !this.showNameInlineEdit) return;
+      if (!row || row.rowType === 'position' || row.rowType === 'dept_group' || !this.showNameInlineEdit) return;
       this.deptNameEditSnapshot = { id: row.id, name: row.name != null ? String(row.name) : '' };
     },
     onDeptNameEnter(ev) {
       if (ev && ev.target) ev.target.blur();
     },
     async onDeptNameBlur(row) {
-      if (!row || row.rowType === 'position' || !this.$canPerm('perm.admin.api.departments.update')) return;
+      if (!row || row.rowType === 'position' || row.rowType === 'dept_group' || !this.$canPerm('perm.admin.api.departments.update')) return;
       if (this.nameBusyId === row.id) return;
       const snap = this.deptNameEditSnapshot;
       if (!snap || snap.id !== row.id) return;
@@ -571,7 +836,7 @@ export default {
       }
     },
     async onLeaderCommit(row, newVal) {
-      if (!row || row.rowType === 'position' || !this.$canPerm('perm.admin.api.departments.update')) {
+      if (!row || row.rowType === 'position' || row.rowType === 'dept_group' || !this.$canPerm('perm.admin.api.departments.update')) {
         return;
       }
       const nextId = newVal === '' || newVal === undefined || newVal === null ? null : Number(newVal);
@@ -592,15 +857,6 @@ export default {
       } finally {
         this.leaderBusyId = null;
       }
-    },
-    /** 职务行：展示所属部门（职务不设负责人） */
-    positionDeptLabel(row) {
-      if (!row || row.rowType !== 'position') return '—';
-      const name = row.dept_name != null ? String(row.dept_name).trim() : '';
-      if (name) return name;
-      const id = row.dept_id != null ? Number(row.dept_id) : NaN;
-      if (Number.isFinite(id) && id > 0) return `部门 #${id}`;
-      return '—';
     },
     buildTree(flat) {
       if (!flat || !flat.length) return [];
@@ -645,14 +901,16 @@ export default {
       return roots;
     },
     onTreeNameClick(row) {
-      if (!row || row.rowType === 'position' || !row.children || !row.children.length) return;
+      if (!row || row.rowType === 'position' || !row.children || !row.children.length) {
+        return;
+      }
       const table = this.$refs.adminDataTable;
       if (table && typeof table.toggleRowExpansion === 'function') {
         table.toggleRowExpansion(row);
       }
     },
     async onSortCommit(row, v) {
-      if (!row || row.rowType === 'position' || !this.$canPerm('perm.admin.api.departments.update')) return;
+      if (!row || row.rowType === 'position' || row.rowType === 'dept_group' || !this.$canPerm('perm.admin.api.departments.update')) return;
       const sort = Math.max(0, Math.floor(Number(v != null ? v : row.sort) || 0));
       row.sort = sort;
       const prev = this.sortBaseline[row.id];
@@ -728,7 +986,7 @@ export default {
       this.formVisible = true;
     },
     openCreateChild(row) {
-      if (row.rowType === 'position' || !this.$canPerm('perm.admin.api.departments.store')) return;
+      if (row.rowType === 'position' || row.rowType === 'dept_group' || !this.$canPerm('perm.admin.api.departments.store')) return;
       this.formMode = 'create';
       this.editingId = null;
       this.form = {
@@ -741,7 +999,7 @@ export default {
       this.formVisible = true;
     },
     openEdit(row) {
-      if (row.rowType === 'position') return;
+      if (row.rowType === 'position' || row.rowType === 'dept_group') return;
       this.formMode = 'edit';
       this.editingId = row.id;
       const pid = row.parent_id != null ? Number(row.parent_id) : 0;
@@ -797,7 +1055,7 @@ export default {
       }
     },
     async patchStatus(row, status) {
-      if (!row || row.rowType === 'position' || !this.$canPerm('perm.admin.api.departments.status')) return;
+      if (!row || row.rowType === 'position' || row.rowType === 'dept_group' || !this.$canPerm('perm.admin.api.departments.status')) return;
       const prev = row.status;
       this.statusBusyId = row.id;
       row.status = status;
@@ -836,7 +1094,10 @@ export default {
       this.posFormVisible = true;
     },
     openPosCreateForDept(row) {
-      if (row.rowType === 'position' || !this.$canPerm('perm.admin.api.positions.store')) return;
+      if (!row || row.rowType === 'position') return;
+      if (row.rowType === 'dept_group' && !this.deptGroupCanAddPosition(row)) return;
+      if (row.rowType !== 'department' && row.rowType !== 'dept_group') return;
+      if (!this.$canPerm('perm.admin.api.positions.store')) return;
       this.ensurePositionDeptOptions();
       if (this.$canPerm('perm.admin.api.positions.index')) {
         this.fetchPositions();
@@ -930,7 +1191,7 @@ export default {
       }
     },
     async confirmDeleteDepartment(row) {
-      if (!row || row.rowType === 'position' || !this.$canPerm('perm.admin.api.departments.destroy')) return;
+      if (!row || row.rowType === 'position' || row.rowType === 'dept_group' || !this.$canPerm('perm.admin.api.departments.destroy')) return;
       const label = (row.name != null && String(row.name).trim()) || `ID ${row.id}`;
       try {
         await this.$confirm(
@@ -993,24 +1254,96 @@ export default {
 .admin-dept-view-mode {
   margin-left: 12px;
 }
-.admin-dept-pos-name-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  line-height: 1.3;
-  padding-left: 2px;
+.admin-dept-pos-tree-group-name {
+  font-weight: 600;
+  color: #303133;
 }
-.admin-dept-pos-name-stack__code {
-  font-size: 11px;
+.admin-dept-muted-cell {
   color: #909399;
+  font-size: 12px;
+}
+.admin-dept-type-icon {
+  flex-shrink: 0;
+  margin-right: 8px;
+  font-size: 15px;
+  color: #909399;
+}
+.admin-dept-dept-name-cell {
+  display: inline-flex;
+  align-items: center;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.admin-dept-pos-name-cell {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 0;
+}
+.admin-dept-table--positions >>> .admin-dept-row--position .admin-dept-pos-name-cell {
+  margin-left: 4px;
+}
+.admin-dept-pos-name-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.admin-dept-pos-code-pill {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 0 6px;
+  line-height: 18px;
+  border-radius: 4px;
+  background: #f4f6f8;
+  color: #606266;
+  border: 1px solid #e6e8eb;
 }
 .admin-dept-unified-position-name {
+  font-weight: 500;
+  color: #303133;
+}
+.admin-dept-pos-level {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
   color: #606266;
+}
+.admin-dept-actions--compact >>> .el-button {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.admin-dept-actions--compact >>> .el-button + .el-button {
+  margin-left: 6px;
+}
+.admin-dept-cell-empty {
+  display: block;
+  min-height: 1px;
+}
+/* 职务树：层级背景 + 职务行左侧色条，弱化「空单元格」噪音 */
+.admin-dept-table--positions >>> tbody tr.admin-dept-row--department > td {
+  background: #f5f7fa !important;
+  border-bottom-color: #ebeef5;
+}
+.admin-dept-table--positions >>> tbody tr.admin-dept-row--dept-group > td {
+  background: #eceff4 !important;
+  border-bottom-color: #e2e6ed;
+}
+.admin-dept-table--positions >>> tbody tr.admin-dept-row--position > td {
+  background: #fff !important;
+}
+.admin-dept-table--positions >>> tbody tr.admin-dept-row--position > td:first-child {
+  box-shadow: inset 3px 0 0 #409eff;
+}
+.admin-dept-table--positions >>> tbody tr.admin-dept-row--department:hover > td {
+  background: #eef1f6 !important;
+}
+.admin-dept-table--positions >>> tbody tr.admin-dept-row--dept-group:hover > td {
+  background: #e5e9f0 !important;
+}
+.admin-dept-table--positions >>> tbody tr.admin-dept-row--position:hover > td {
+  background: #fafcff !important;
 }
 .admin-dept-leader-inline {
   width: 100%;

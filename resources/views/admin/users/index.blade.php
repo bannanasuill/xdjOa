@@ -60,6 +60,7 @@
                         <th scope="col">姓名</th>
                         <th scope="col">账号</th>
                         <th scope="col">手机</th>
+                        <th scope="col">当下状态</th>
                         <th scope="col">状态</th>
                         <th scope="col">创建时间</th>
                         <th scope="col" class="admin-table__col-actions">操作</th>
@@ -72,6 +73,17 @@
                             <td>{{ $user->real_name ?: '—' }}</td>
                             <td>{{ $user->account }}</td>
                             <td>{{ $user->phone ?: '—' }}</td>
+                            <td>
+                                @php
+                                    $pm = $presenceMetaMap[$user->id] ?? ['label' => '—', 'out_reason' => null];
+                                    $presenceLabel = $pm['label'];
+                                    $presenceTitle = \App\Models\UserModel::presenceTodayHoverTitle($presenceLabel, $pm['out_reason'] ?? null);
+                                @endphp
+                                <span
+                                    class="{{ \App\Models\UserModel::presenceTodayPillClass($presenceLabel) }}"
+                                    @if ($presenceTitle !== '') title="{{ e($presenceTitle) }}" @endif
+                                >{{ $presenceLabel }}</span>
+                            </td>
                             <td>
                                 @if ($user->isSuperAdminAccount())
                                     @if ((int) $user->status === 1)

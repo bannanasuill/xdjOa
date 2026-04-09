@@ -31,4 +31,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    | 百度地图：须「服务端」类型 AK + 地理编码接口 + 服务器出口 IP 白名单。
+    | 浏览器端 AK（Referer 校验）不能用于本项目的服务端请求。
+    */
+    'baidu_map' => [
+        'ak' => env('BAIDU_MAP_AK'),
+    ],
+
 ];

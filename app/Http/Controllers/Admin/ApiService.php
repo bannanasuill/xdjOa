@@ -30,6 +30,8 @@ class ApiService extends Controller
         'menu.admin_expense_templates' => 'perm.admin.expense.templates',
         'menu.admin_expense_apply' => 'perm.admin.expense.apply',
         'menu.admin_departments' => 'perm.admin.departments',
+        'menu.admin_stores' => 'perm.admin.stores',
+        'menu.admin_attendance_rules' => 'perm.admin.attendance_rules',
     ];
 
     public function me(Request $request): JsonResponse
