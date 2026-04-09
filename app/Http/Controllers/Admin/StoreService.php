@@ -154,8 +154,8 @@ class StoreService extends Controller
         return response()->json([
             'message' => '已根据地址解析经纬度（GCJ-02）',
             'data' => [
-                'longitude' => round((float) $lng, 6),
-                'latitude' => round((float) $lat, 6),
+                'longitude' => round($lng, 6),
+                'latitude' => round($lat, 6),
                 'query' => $query,
                 'level' => $json['result']['level'] ?? null,
             ],
@@ -286,9 +286,6 @@ class StoreService extends Controller
         }
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     private function baiduGeocodeFailureMessage(string $baiduMessage): string
     {
         $base = '百度地图：'.$baiduMessage;

@@ -36,6 +36,22 @@
             :value="o.value"
           />
         </el-select>
+        <el-select
+          v-model="query.position_id"
+          clearable
+          filterable
+          placeholder="按职务筛选"
+          size="small"
+          class="admin-w-220"
+          @change="fetchUsers(1)"
+        >
+          <el-option
+            v-for="p in positionFilterOptions"
+            :key="p.id"
+            :label="positionOptionLabel(p)"
+            :value="p.id"
+          />
+        </el-select>
         <el-button size="small" type="primary" @click="fetchUsers(1)">查询</el-button>
         <el-button size="small" @click="reset">重置</el-button>
         <span class="admin-flex-spacer"></span>
@@ -404,8 +420,9 @@ export default {
       loading: false,
       rows: [],
       meta: { current_page: 1, per_page: 20, total: 0, last_page: 1 },
-      query: { q: '', role_id: null, presence_today: null, per_page: 20 },
+      query: { q: '', role_id: null, presence_today: null, position_id: null, per_page: 20 },
       roleFilterOptions: [],
+      positionFilterOptions: [],
       presenceFilterOptions: [
         { value: 'not_arrived', label: '未到岗' },
         { value: 'present', label: '到岗' },
@@ -487,9 +504,15 @@ export default {
   },
   created() {
     this.loadRoleFilterOptions();
+    this.loadPositionFilterOptions();
     this.fetchUsers(1);
   },
   methods: {
+    positionOptionLabel(p) {
+      const name = (p && p.name && String(p.name).trim()) || '';
+      const dn = p && p.dept_name && String(p.dept_name).trim() ? String(p.dept_name).trim() : '';
+      return dn ? `${name}（${dn}）` : name || String(p.id);
+    },
     userRowIndex(index) {
       const page = this.meta.current_page || 1;
       const per = this.meta.per_page || 20;
@@ -514,6 +537,9 @@ export default {
         if (this.query.presence_today != null && this.query.presence_today !== '') {
           params.presence_today = this.query.presence_today;
         }
+        if (this.query.position_id != null && this.query.position_id !== '') {
+          params.position_id = this.query.position_id;
+        }
         const { data } = await window.axios.get('/admin/api/users', { params });
         this.rows = (data.data || []).map((u) => ({
           ...u,
@@ -531,6 +557,7 @@ export default {
       this.query.q = '';
       this.query.role_id = null;
       this.query.presence_today = null;
+      this.query.position_id = null;
       this.query.per_page = 20;
       this.fetchUsers(1);
     },
@@ -540,6 +567,18 @@ export default {
         this.roleFilterOptions = data.data || [];
       } catch (e) {
         this.roleFilterOptions = [];
+      }
+    },
+    async loadPositionFilterOptions() {
+      if (!this.$canPerm('perm.admin.api.users.index')) {
+        this.positionFilterOptions = [];
+        return;
+      }
+      try {
+        const { data } = await window.axios.get('/admin/api/users/position-filter-options');
+        this.positionFilterOptions = data.data || [];
+      } catch (e) {
+        this.positionFilterOptions = [];
       }
     },
     openPresenceViewer(row) {

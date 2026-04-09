@@ -79,37 +79,66 @@ class UserService extends Controller
                 ->all();
         }
 
-        $positions = [];
-        if (Schema::hasTable('positions')) {
-            $pq = PositionModel::query()->where('status', 1)->orderBy('dept_id')->orderByDesc('level')->orderByDesc('id');
-            $plist = $pq->get();
-            $deptIds = $plist->pluck('dept_id')->unique()->filter()->all();
-            $depts = [];
-            if ($deptIds !== [] && Schema::hasTable('departments')) {
-                $depts = DepartmentModel::query()
-                    ->whereIn('id', $deptIds)
-                    ->get(['id', 'name'])
-                    ->keyBy('id');
-            }
-            $positions = $plist->map(static function (PositionModel $p) use ($depts) {
-                $d = $depts[$p->dept_id] ?? null;
-                $dn = $d !== null ? trim((string) ($d->name ?? '')) : '';
-
-                return [
-                    'id' => (int) $p->id,
-                    'name' => trim((string) ($p->name ?? '')),
-                    'dept_id' => (int) $p->dept_id,
-                    'dept_name' => $dn,
-                ];
-            })->values()->all();
-        }
-
         return response()->json([
             'data' => [
                 'departments' => $departments,
-                'positions' => $positions,
+                'positions' => self::activePositionOptionsForPicker(),
             ],
         ]);
+    }
+
+    /**
+     * 用户列表「按职务筛选」、分配职务等下拉：启用职务 + 部门名称（与 org-options 中 positions 一致）。
+     *
+     * @return list<array{id:int, name:string, dept_id:int, dept_name:string}>
+     */
+    private static function activePositionOptionsForPicker(): array
+    {
+        if (! Schema::hasTable('positions')) {
+            return [];
+        }
+        $plist = PositionModel::query()
+            ->where('status', 1)
+            ->orderBy('dept_id')
+            ->orderByDesc('level')
+            ->orderByDesc('id')
+            ->get();
+        $deptIds = $plist->pluck('dept_id')->unique()->filter()->all();
+        $depts = [];
+        if ($deptIds !== [] && Schema::hasTable('departments')) {
+            $depts = DepartmentModel::query()
+                ->whereIn('id', $deptIds)
+                ->get(['id', 'name'])
+                ->keyBy('id');
+        }
+
+        return $plist->map(static function (PositionModel $p) use ($depts) {
+            $d = $depts[$p->dept_id] ?? null;
+            $dn = $d !== null ? trim((string) ($d->name ?? '')) : '';
+
+            return [
+                'id' => (int) $p->id,
+                'name' => trim((string) ($p->name ?? '')),
+                'dept_id' => (int) $p->dept_id,
+                'dept_name' => $dn,
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * 用户列表筛选用职务下拉（仅需「用户列表」读权限）。
+     */
+    public function apiPositionFilterOptions(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+        if ($actor === null) {
+            return response()->json(['message' => '未登录'], 401);
+        }
+        if (! $actor->canAdminPermission('perm.admin.api.users.index')) {
+            return response()->json(['message' => '无权查看职务选项'], 403);
+        }
+
+        return response()->json(['data' => self::activePositionOptionsForPicker()]);
     }
 
     /** Blade 分页列表（无 SPA 时访问 /admin/users）。 */
@@ -122,6 +151,8 @@ class UserService extends Controller
             'users' => $payload['users'],
             'searchQuery' => $payload['searchQuery'],
             'filterRoleId' => $payload['filterRoleId'],
+            'filterPositionId' => $payload['filterPositionId'],
+            'positionFilterOptions' => self::activePositionOptionsForPicker(),
             'roleFilterOptions' => RoleModel::assignableForUserPicker(),
             'perPage' => $payload['perPage'],
             'perPageOptions' => [10, 20, 50, 100],
@@ -671,10 +702,14 @@ class UserService extends Controller
             'q' => ['nullable', 'string', 'max:100'],
             'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50, 100])],
             'role_id' => ['nullable', 'integer', 'min:1'],
+            'position_id' => ['nullable', 'integer', 'min:1'],
             'presence_today' => ['nullable', 'string', Rule::in(array_keys(UserModel::adminListPresenceFilterOptions()))],
         ];
         if (RoleModel::isTablePresent()) {
             $rules['role_id'][] = Rule::exists('roles', 'id');
+        }
+        if (Schema::hasTable('positions')) {
+            $rules['position_id'][] = Rule::exists('positions', 'id');
         }
 
         return $rules;
@@ -792,6 +827,7 @@ class UserService extends Controller
      *     users: \Illuminate\Contracts\Pagination\LengthAwarePaginator,
      *     searchQuery: string,
      *     filterRoleId: int|null,
+     *     filterPositionId: int|null,
      *     perPage: int,
      * }
      */
@@ -800,11 +836,12 @@ class UserService extends Controller
         $keyword = trim((string) ($validated['q'] ?? ''));
         $perPage = (int) ($validated['per_page'] ?? 20);
         $roleId = isset($validated['role_id']) ? (int) $validated['role_id'] : null;
+        $positionId = isset($validated['position_id']) ? (int) $validated['position_id'] : null;
         $presenceToday = isset($validated['presence_today']) && is_string($validated['presence_today']) && $validated['presence_today'] !== ''
             ? $validated['presence_today']
             : null;
 
-        $users = UserModel::adminListQuery($keyword, $roleId, $presenceToday)
+        $users = UserModel::adminListQuery($keyword, $roleId, $presenceToday, $positionId)
             ->orderBy('id')
             ->paginate($perPage)
             ->withQueryString();
@@ -816,6 +853,7 @@ class UserService extends Controller
             'users' => $users,
             'searchQuery' => $keyword,
             'filterRoleId' => $roleId,
+            'filterPositionId' => $positionId > 0 ? $positionId : null,
             'filterPresenceToday' => $presenceToday,
             'perPage' => $perPage,
             'presenceMetaMap' => $presenceMetaMap,
@@ -831,11 +869,18 @@ class UserService extends Controller
         $keyword = trim((string) ($validated['q'] ?? ''));
         $perPage = (int) ($validated['per_page'] ?? 20);
         $roleId = isset($validated['role_id']) ? (int) $validated['role_id'] : null;
+        $positionId = isset($validated['position_id']) ? (int) $validated['position_id'] : null;
         $presenceToday = isset($validated['presence_today']) && is_string($validated['presence_today']) && $validated['presence_today'] !== ''
             ? $validated['presence_today']
             : null;
 
-        return UserModel::paginatedAdminApiList($keyword, $roleId, $perPage, $presenceToday);
+        return UserModel::paginatedAdminApiList(
+            $keyword,
+            $roleId,
+            $perPage,
+            $presenceToday,
+            $positionId > 0 ? $positionId : null,
+        );
     }
 
     /**

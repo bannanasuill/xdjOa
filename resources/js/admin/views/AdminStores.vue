@@ -160,30 +160,33 @@
       append-to-body
       custom-class="admin-stores-map-dialog"
       @opened="onMapPickerDialogOpened"
+      @closed="onMapPickerDialogClosed"
     >
-      <div v-loading="mapPickerLoading" class="admin-bmap-picker-wrap">
+      <div class="admin-bmap-picker-wrap">
         <p class="admin-form-hint admin-bmap-picker-hint">
           可先输入地址「定位」到大致区域，再点击地图或拖动标记微调。点「确定选点」后，会回填到店铺表单中的「详细地址」「经度」「纬度」（GCJ-02）。
         </p>
-        <div class="admin-bmap-picker-search">
-          <el-input
-            v-model="mapPickerSearchText"
-            size="small"
-            clearable
-            placeholder="输入地址关键词（省市区+路名等），粗略定位"
-            class="admin-bmap-picker-search-input"
-            @keyup.enter.native="locateMapPickerByAddress"
-          />
-          <el-input
-            v-model="mapPickerSearchCity"
-            size="small"
-            clearable
-            placeholder="城市（可选）"
-            class="admin-bmap-picker-city-input"
-          />
-          <el-button size="small" type="primary" :loading="mapPickerGeocodeBusy" @click="locateMapPickerByAddress">
-            定位
-          </el-button>
+        <div v-loading="mapPickerLoading" class="admin-bmap-picker-toolbar">
+          <div class="admin-bmap-picker-search">
+            <el-input
+              v-model="mapPickerSearchText"
+              size="small"
+              clearable
+              placeholder="输入地址关键词（省市区+路名等），粗略定位"
+              class="admin-bmap-picker-search-input"
+              @keyup.enter.native="locateMapPickerByAddress"
+            />
+            <el-input
+              v-model="mapPickerSearchCity"
+              size="small"
+              clearable
+              placeholder="城市（可选）"
+              class="admin-bmap-picker-city-input"
+            />
+            <el-button size="small" type="primary" :loading="mapPickerGeocodeBusy" @click="locateMapPickerByAddress">
+              定位
+            </el-button>
+          </div>
         </div>
         <div ref="bmapPickerContainer" class="admin-bmap-picker"></div>
       </div>
@@ -262,25 +265,19 @@ function formatBaiduGeocoderAddress(rs) {
   if (typeof rs.getAddress === 'function') {
     try {
       const s = rs.getAddress();
-      if (s) {
-        return String(s).trim();
-      }
+      if (s) return String(s).trim();
     } catch (e) {
       /* ignore */
     }
   }
   const direct = rs.address != null ? String(rs.address).trim() : '';
-  if (direct) {
-    return direct;
-  }
+  if (direct) return direct;
   const c = rs.addressComponents;
-  if (!c || typeof c !== 'object') {
-    return '';
-  }
-  const parts = [c.province, c.city, c.district, c.street, c.streetNumber]
+  if (!c || typeof c !== 'object') return '';
+  return [c.province, c.city, c.district, c.street, c.streetNumber]
     .map((x) => (x != null ? String(x).trim() : ''))
-    .filter(Boolean);
-  return parts.join('');
+    .filter(Boolean)
+    .join('');
 }
 
 const emptyForm = () => ({
@@ -329,6 +326,17 @@ export default {
       }
       return String(window.__BAIDU_MAP_BROWSER_AK__ || '').trim() !== '';
     },
+  },
+  beforeDestroy() {
+    if (this.bmapPickerMap) {
+      try {
+        this.bmapPickerMap.clearOverlays();
+      } catch (e) {
+        /* ignore */
+      }
+      this.bmapPickerMap = null;
+      this.bmapPickerMarker = null;
+    }
   },
   created() {
     this.fetchList();
@@ -418,14 +426,16 @@ export default {
       this.mapPickerSearchCity = '';
       this.mapPickerVisible = true;
     },
-    locateMapPickerByAddress() {
-      const { BMap: B } = window;
+    async locateMapPickerByAddress() {
       const text = (this.mapPickerSearchText || '').trim();
       if (text.length < 2) {
         this.$message.warning('请输入更具体的地址（至少 2 个字符）');
         return;
       }
-      if (!B || !this.bmapPickerMap || !this.bmapPickerMarker) {
+      const map = this.bmapPickerMap;
+      const marker = this.bmapPickerMarker;
+      const { BMap: B } = window;
+      if (!B || !map || !marker) {
         this.$message.warning('地图尚未就绪，请稍候再试');
         return;
       }
@@ -436,62 +446,72 @@ export default {
         this.mapPickerGeocodeBusy = false;
       };
       const timer = setTimeout(clearBusy, 15000);
-      geocoder.getPoint(
-        text,
-        (point) => {
-          clearTimeout(timer);
-          clearBusy();
-          if (!point) {
-            this.$message.warning('未找到该地址，请换关键词或直接在地图上点击');
-            return;
-          }
-          this.bmapPickerMap.centerAndZoom(point, 17);
-          this.bmapPickerMarker.setPosition(point);
-        },
-        city || ''
-      );
+      geocoder.getPoint(text, (point) => {
+        clearTimeout(timer);
+        clearBusy();
+        if (!point) {
+          this.$message.warning('未找到该地址，请换关键词或直接在地图上点击');
+          return;
+        }
+        map.centerAndZoom(point, 17);
+        marker.setPosition(point);
+      }, city || '');
+    },
+    onMapPickerDialogClosed() {
+      if (this.bmapPickerMap) {
+        try {
+          this.bmapPickerMap.clearOverlays();
+        } catch (e) {
+          /* ignore */
+        }
+        this.bmapPickerMap = null;
+        this.bmapPickerMarker = null;
+      }
     },
     async onMapPickerDialogOpened() {
       this.mapPickerLoading = true;
       try {
         await loadBaiduMapScriptsOnce();
-        await this.$nextTick();
-        this.buildOrRefreshBmapPicker();
-        await this.syncBmapPickerFromFormCoords();
       } catch (e) {
         this.$message.error('地图加载失败，请检查 BAIDU_MAP_BROWSER_AK、Referer 白名单与网络');
         this.mapPickerVisible = false;
-      } finally {
-        this.mapPickerLoading = false;
-        this.$nextTick(() => {
-          if (this.bmapPickerMap) {
-            this.bmapPickerMap.checkResize();
-          }
-        });
+        return;
       }
+      await this.$nextTick();
+      this.buildOrRefreshAmapPicker();
+      await this.syncAmapPickerFromFormCoords();
+      this.mapPickerLoading = false;
+      this.$nextTick(() => {
+        if (this.bmapPickerMap) {
+          this.bmapPickerMap.checkResize();
+        }
+      });
     },
-    buildOrRefreshBmapPicker() {
+    /** @returns {boolean} */
+    buildOrRefreshAmapPicker() {
       const { BMap: B } = window;
       const el = this.$refs.bmapPickerContainer;
       if (!B || !el) {
-        return;
+        return false;
       }
       const defaultPt = new B.Point(116.404269, 39.915378);
-      if (!this.bmapPickerMap) {
-        const map = new B.Map(el);
-        map.enableScrollWheelZoom(true);
-        map.addControl(new B.NavigationControl());
-        const marker = new B.Marker(defaultPt);
-        marker.enableDragging();
-        map.addOverlay(marker);
-        map.addEventListener('click', (e) => {
-          marker.setPosition(e.point);
-        });
-        this.bmapPickerMap = map;
-        this.bmapPickerMarker = marker;
+      if (this.bmapPickerMap) {
+        return true;
       }
+      const map = new B.Map(el);
+      map.enableScrollWheelZoom(true);
+      map.addControl(new B.NavigationControl());
+      const marker = new B.Marker(defaultPt);
+      marker.enableDragging();
+      map.addOverlay(marker);
+      map.addEventListener('click', (e) => {
+        marker.setPosition(e.point);
+      });
+      this.bmapPickerMap = map;
+      this.bmapPickerMarker = marker;
+      return true;
     },
-    syncBmapPickerFromFormCoords() {
+    syncAmapPickerFromFormCoords() {
       return new Promise((resolve) => {
         const { BMap: B } = window;
         const map = this.bmapPickerMap;
@@ -532,15 +552,9 @@ export default {
       const convertor = new B.Convertor();
       geocoder.getLocation(bdPt, (rs) => {
         let addr = formatBaiduGeocoderAddress(rs);
-        if (!addr) {
-          addr = (this.mapPickerSearchText || '').trim();
-        }
-        if (!addr) {
-          addr = (this.form.address || '').trim();
-        }
-        if (addr.length > 255) {
-          addr = addr.slice(0, 255);
-        }
+        if (!addr) addr = (this.mapPickerSearchText || '').trim();
+        if (!addr) addr = (this.form.address || '').trim();
+        if (addr.length > 255) addr = addr.slice(0, 255);
         convertor.translate([bdPt], 5, 3, (data) => {
           const p = bmapTranslateFirstPoint(data, null);
           if (!p) {
@@ -548,15 +562,10 @@ export default {
             this.$message.error(`坐标转换失败${code}，请重试`);
             return;
           }
-          const lon = String(Math.round(p.lng * 1e6) / 1e6);
-          const lat = String(Math.round(p.lat * 1e6) / 1e6);
-          this.$set(this.form, 'longitude', lon);
-          this.$set(this.form, 'latitude', lat);
+          this.$set(this.form, 'longitude', String(Math.round(p.lng * 1e6) / 1e6));
+          this.$set(this.form, 'latitude', String(Math.round(p.lat * 1e6) / 1e6));
           this.$set(this.form, 'address', addr);
-          const hasAddr = addr.length > 0;
-          this.$message.success(
-            hasAddr ? '已回填详细地址与经纬度（GCJ-02）' : '已回填经纬度（GCJ-02），请补充详细地址'
-          );
+          this.$message.success(addr ? '已回填详细地址与经纬度（GCJ-02）' : '已回填经纬度（GCJ-02），请补充详细地址');
           this.$nextTick(() => {
             this.mapPickerVisible = false;
           });
@@ -733,8 +742,18 @@ export default {
   min-height: 420px;
 }
 
+.admin-bmap-picker-toolbar {
+  min-height: 40px;
+  margin-bottom: 8px;
+}
+
 .admin-bmap-picker-hint {
   margin: 0 0 8px;
+}
+
+.admin-bmap-picker-debug {
+  margin: 0 0 8px;
+  color: #909399;
 }
 
 .admin-bmap-picker-search {
@@ -755,10 +774,20 @@ export default {
 }
 
 .admin-bmap-picker {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 400px;
+  min-height: 400px;
   border-radius: 4px;
   overflow: hidden;
   background: #e8ecf0;
+}
+</style>
+
+<!-- append-to-body 的 el-dialog 不受 scoped 作用域影响，需单独修正 transform -->
+<style>
+.admin-stores-map-dialog.el-dialog {
+  transform: none !important;
 }
 </style>

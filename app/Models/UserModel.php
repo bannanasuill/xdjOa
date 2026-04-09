@@ -302,10 +302,14 @@ class UserModel extends Authenticatable
     }
 
     /**
-     * 用户管理列表查询构造器：全表 + 可选账号/姓名模糊 + 可选角色 + 可选今日当下状态。
+     * 用户管理列表查询构造器：全表 + 可选账号/姓名模糊 + 可选角色 + 可选今日当下状态 + 可选职务。
      */
-    public static function adminListQuery(string $keyword, ?int $roleId = null, ?string $presenceFilter = null): Builder
-    {
+    public static function adminListQuery(
+        string $keyword,
+        ?int $roleId = null,
+        ?string $presenceFilter = null,
+        ?int $positionId = null,
+    ): Builder {
         $query = static::query();
         $keyword = trim($keyword);
         if ($keyword !== '') {
@@ -325,6 +329,21 @@ class UserModel extends Authenticatable
                         ->from($tUr)
                         ->whereColumn($tUr.'.user_id', $tU.'.id')
                         ->where($tUr.'.role_id', $roleId);
+                });
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        if ($positionId !== null && $positionId > 0) {
+            $tUp = 'user_positions';
+            $tU = 'users';
+            if (Schema::hasTable($tUp)) {
+                $query->whereExists(function ($q) use ($positionId, $tUp, $tU) {
+                    $q->selectRaw('1')
+                        ->from($tUp)
+                        ->whereColumn($tUp.'.user_id', $tU.'.id')
+                        ->where($tUp.'.position_id', $positionId);
                 });
             } else {
                 $query->whereRaw('1 = 0');
@@ -952,9 +971,14 @@ class UserModel extends Authenticatable
      *
      * @return array{data: list<array<string, mixed>>, paginator: \Illuminate\Pagination\LengthAwarePaginator}
      */
-    public static function paginatedAdminApiList(string $keyword, ?int $roleId, int $perPage, ?string $presenceFilter = null): array
-    {
-        $paginator = static::adminListQuery($keyword, $roleId, $presenceFilter)
+    public static function paginatedAdminApiList(
+        string $keyword,
+        ?int $roleId,
+        int $perPage,
+        ?string $presenceFilter = null,
+        ?int $positionId = null,
+    ): array {
+        $paginator = static::adminListQuery($keyword, $roleId, $presenceFilter, $positionId)
             ->orderBy('id')
             ->paginate($perPage);
 

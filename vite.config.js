@@ -37,6 +37,10 @@ export default defineConfig(({ mode }) => {
         devPublicOriginFromAppUrl(env.APP_URL);
 
     return {
+        build: {
+            // Vue2 + Element 后台单包约 1MB+，非错误；需要时再按路由做 dynamic import 拆分
+            chunkSizeWarningLimit: 1200,
+        },
         server: {
             host: '0.0.0.0',
             port: 5180,

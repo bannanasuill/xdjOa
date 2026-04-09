@@ -59,6 +59,9 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
             ->middleware('admin.perm:perm.admin.api.users.update')
             ->name('admin.api.users.store-assignment-options');
 
+        Route::get('/users/position-filter-options', [UserService::class, 'apiPositionFilterOptions'])
+            ->middleware('admin.perm:perm.admin.api.users.index')
+            ->name('admin.api.users.position-filter-options');
         Route::get('/users', [UserService::class, 'apiIndex'])
             ->middleware('admin.perm:perm.admin.api.users.index')
             ->name('admin.api.users.index');

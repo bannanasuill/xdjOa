@@ -33,9 +33,18 @@
                         <option value="{{ $pCode }}" @selected(($filterPresenceToday ?? '') === $pCode)>{{ $pLabel }}</option>
                     @endforeach
                 </select>
+                <label class="admin-sr-only" for="admin-users-position">按职务筛选</label>
+                <select name="position_id" id="admin-users-position" class="admin-form__input admin-panel__search-input" style="max-width:13rem;">
+                    <option value="">全部职务</option>
+                    @foreach ($positionFilterOptions ?? [] as $pos)
+                        <option value="{{ $pos['id'] }}" @selected((int) ($filterPositionId ?? 0) === (int) ($pos['id'] ?? 0))>
+                            {{ $pos['name'] }}{{ ($pos['dept_name'] ?? '') !== '' ? '（' . $pos['dept_name'] . '）' : '' }}
+                        </option>
+                    @endforeach
+                </select>
                 <button type="submit" class="admin-btn">搜索</button>
                 @php
-                    $hasListFilters = $searchQuery !== '' || !empty($filterRoleId) || ($filterPresenceToday ?? '') !== '';
+                    $hasListFilters = $searchQuery !== '' || !empty($filterRoleId) || ($filterPresenceToday ?? '') !== '' || !empty($filterPositionId);
                 @endphp
                 @if ($hasListFilters)
                     <a href="{{ route('admin.users.index', ['per_page' => $perPage]) }}" class="admin-btn admin-btn--muted">清除</a>
@@ -51,6 +60,9 @@
         @endif
         @if ($errors->has('presence_today'))
             <p class="admin-alert admin-alert--error admin-panel__alert" role="alert">{{ $errors->first('presence_today') }}</p>
+        @endif
+        @if ($errors->has('position_id'))
+            <p class="admin-alert admin-alert--error admin-panel__alert" role="alert">{{ $errors->first('position_id') }}</p>
         @endif
         @if (session('success'))
             <p id="admin-success-alert" class="admin-alert admin-alert--success" role="status">{{ session('success') }}</p>
@@ -157,6 +169,15 @@
                     <form method="get" action="{{ route('admin.users.index') }}" class="admin-panel__per-page">
                         @if ($searchQuery !== '')
                             <input type="hidden" name="q" value="{{ $searchQuery }}">
+                        @endif
+                        @if (!empty($filterRoleId))
+                            <input type="hidden" name="role_id" value="{{ $filterRoleId }}">
+                        @endif
+                        @if (($filterPresenceToday ?? '') !== '')
+                            <input type="hidden" name="presence_today" value="{{ $filterPresenceToday }}">
+                        @endif
+                        @if (!empty($filterPositionId))
+                            <input type="hidden" name="position_id" value="{{ $filterPositionId }}">
                         @endif
                         <label for="admin-users-per-page" class="admin-panel__per-page-label">每页</label>
                         <select name="per_page" id="admin-users-per-page" class="admin-form__select admin-panel__per-page-select" onchange="this.form.submit()">

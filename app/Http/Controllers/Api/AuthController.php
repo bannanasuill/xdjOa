@@ -126,6 +126,51 @@ class AuthController extends Controller
     }
 
     /**
+     * 修改登录密码（小程序）：校验当前密码后更新；当前 Token 可继续使用。
+     */
+    public function password(Request $request): JsonResponse
+    {
+        if (! Schema::hasTable('users')) {
+            return $this->fail(1999, '用户表未就绪');
+        }
+
+        $user = $request->user();
+        if (! $user instanceof UserModel) {
+            return $this->fail(1006, '未登录');
+        }
+
+        $validator = Validator::make($request->all(), [
+            'currentPassword' => ['required', 'string'],
+            'password' => ['required', 'string'],
+            'confirmPassword' => ['required', 'string'],
+        ]);
+        if ($validator->fails()) {
+            return $this->fail(1003, $validator->errors()->first() ?: '参数校验失败');
+        }
+
+        $currentPassword = (string) $request->input('currentPassword', '');
+        $password = (string) $request->input('password', '');
+        $confirmPassword = (string) $request->input('confirmPassword', '');
+
+        if ($password !== $confirmPassword) {
+            return $this->fail(1005, '两次密码不一致');
+        }
+        if (mb_strlen($password) < 6 || mb_strlen($password) > 20) {
+            return $this->fail(1004, '新密码需为 6-20 位');
+        }
+
+        if (! Hash::check($currentPassword, (string) $user->password)) {
+            return $this->fail(1010, '当前密码不正确');
+        }
+
+        $user->password = $password;
+        $user->updated_at = time();
+        $user->save();
+
+        return $this->ok('密码已更新', null);
+    }
+
+    /**
      * @param  array<string, mixed>|null  $data
      */
     private function ok(string $message = 'success', ?array $data = []): JsonResponse
