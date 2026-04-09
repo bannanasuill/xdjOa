@@ -21,6 +21,21 @@
         >
           <el-option v-for="r in roleFilterOptions" :key="r.id" :label="roleOptionLabel(r)" :value="r.id" />
         </el-select>
+        <el-select
+          v-model="query.presence_today"
+          clearable
+          placeholder="当下状态"
+          size="small"
+          class="admin-w-160"
+          @change="fetchUsers(1)"
+        >
+          <el-option
+            v-for="o in presenceFilterOptions"
+            :key="o.value"
+            :label="o.label"
+            :value="o.value"
+          />
+        </el-select>
         <el-button size="small" type="primary" @click="fetchUsers(1)">查询</el-button>
         <el-button size="small" @click="reset">重置</el-button>
         <span class="admin-flex-spacer"></span>
@@ -37,15 +52,10 @@
         size="mini"
         v-loading="loading"
       >
-        <el-table-column prop="id" label="ID" width="64" fixed="left" />
+        <el-table-column type="index" label="序号" width="56" fixed="left" :index="userRowIndex" />
         <el-table-column label="姓名" min-width="100" fixed="left">
           <template slot-scope="{ row }">
             <span :title="adminEllipsisTitle(row.real_name)">{{ adminEllipsisDisplay(row.real_name) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="账号" min-width="108" fixed="left">
-          <template slot-scope="{ row }">
-            <span class="admin-user-account-cell" :title="adminEllipsisTitle(row.account)">{{ adminEllipsisDisplay(row.account) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="角色" min-width="168" class-name="admin-users-col-roles">
@@ -86,11 +96,6 @@
             <span v-else class="admin-users-op-empty">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" width="158">
-          <template slot-scope="{ row }">
-            {{ formatTs(row.created_at) }}
-          </template>
-        </el-table-column>
         <el-table-column label="当下状态" min-width="100" align="center">
           <template slot-scope="{ row }">
             <span
@@ -113,15 +118,24 @@
             <span v-else>{{ row.status === 1 ? '启用' : '禁用' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="400" fixed="right" class-name="admin-users-col-actions">
+        <el-table-column label="操作" width="520" fixed="right" class-name="admin-users-col-actions">
           <template slot-scope="{ row }">
+            <el-button
+              v-if="$canPerm('perm.admin.api.users.index')"
+              size="mini"
+              class="admin-mr-6"
+              @click="openPresenceViewer(row)"
+            >查看出勤</el-button>
             <template v-if="!row.is_super_admin && $canPerm('perm.admin.api.users.update')">
               <el-button size="mini" class="admin-mr-6" @click="openRoleAssign(row)">分配角色</el-button>
               <el-button size="mini" class="admin-mr-6" @click="openOrgAssign(row)">分配职务</el-button>
               <el-button size="mini" class="admin-mr-6" @click="openStoreAssign(row)">分配店铺</el-button>
               <el-button size="mini" @click="openEdit(row)">编辑</el-button>
             </template>
-            <span v-else class="admin-users-op-empty">—</span>
+            <span
+              v-if="!$canPerm('perm.admin.api.users.index') && (row.is_super_admin || !$canPerm('perm.admin.api.users.update'))"
+              class="admin-users-op-empty"
+            >—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -299,6 +313,71 @@
       </span>
     </el-dialog>
 
+    <el-dialog
+      :title="presenceDialogTitle"
+      :visible.sync="presenceVisible"
+      width="900px"
+      top="5vh"
+      :close-on-click-modal="false"
+      custom-class="admin-users-presence-dialog"
+      @closed="onPresenceClosed"
+    >
+      <div class="admin-form-row admin-mb-12">
+        <el-date-picker
+          v-model="presenceDateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="yyyy-MM-dd"
+          size="small"
+          clearable
+          unlink-panels
+        />
+        <el-button size="small" type="primary" @click="onPresenceQuery">查询</el-button>
+        <el-button size="small" @click="presenceDateRange = null; onPresenceQuery()">重置日期</el-button>
+      </div>
+      <el-table
+        :data="presenceRows"
+        v-loading="presenceLoading"
+        size="mini"
+        class="admin-data-table"
+        max-height="440"
+        empty-text="暂无出勤记录"
+      >
+        <el-table-column prop="work_date" label="业务日" width="108" />
+        <el-table-column prop="record_type_label" label="类型" width="72" align="center" />
+        <el-table-column label="开始时间" width="158">
+          <template slot-scope="{ row }">{{ formatTs(row.start_at) }}</template>
+        </el-table-column>
+        <el-table-column label="结束时间" width="158">
+          <template slot-scope="{ row }">{{ row.end_at != null ? formatTs(row.end_at) : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="时长" width="88" align="center">
+          <template slot-scope="{ row }">{{ presenceDurationText(row) }}</template>
+        </el-table-column>
+        <el-table-column label="原因/说明" min-width="120" show-overflow-tooltip>
+          <template slot-scope="{ row }">{{ row.reason || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="地址" min-width="140" show-overflow-tooltip>
+          <template slot-scope="{ row }">{{ row.address || '—' }}</template>
+        </el-table-column>
+      </el-table>
+      <div class="admin-pager-row" style="margin-top: 12px; padding-bottom: 0;">
+        <el-select v-model="presenceQuery.per_page" size="small" class="admin-w-110" @change="fetchPresenceRecords(1)">
+          <el-option v-for="n in presencePerPageOptions" :key="n" :label="`${n}/页`" :value="n" />
+        </el-select>
+        <el-pagination
+          background
+          layout="prev, pager, next, total"
+          :page-size="presenceMeta.per_page"
+          :current-page="presenceMeta.current_page"
+          :total="presenceMeta.total"
+          @current-change="fetchPresenceRecords"
+        />
+      </div>
+    </el-dialog>
+
     <el-dialog :visible.sync="remarkVisible" width="420px">
       <div style="font-weight:600; margin-bottom:10px;">{{ remarkTitle }}</div>
       <el-input
@@ -325,8 +404,15 @@ export default {
       loading: false,
       rows: [],
       meta: { current_page: 1, per_page: 20, total: 0, last_page: 1 },
-      query: { q: '', role_id: null, per_page: 20 },
+      query: { q: '', role_id: null, presence_today: null, per_page: 20 },
       roleFilterOptions: [],
+      presenceFilterOptions: [
+        { value: 'not_arrived', label: '未到岗' },
+        { value: 'present', label: '到岗' },
+        { value: 'outing', label: '外出' },
+        { value: 'off_work', label: '下班' },
+        { value: 'unknown', label: '其他' },
+      ],
       perPageOptions: [10, 20, 50, 100],
 
       // create/edit
@@ -361,9 +447,25 @@ export default {
       storeOptions: [],
       storePositionOptions: [],
       storeAssignSaving: false,
+
+      presenceVisible: false,
+      presenceTarget: null,
+      presenceLoading: false,
+      presenceRows: [],
+      presenceDateRange: null,
+      presenceQuery: { page: 1, per_page: 20 },
+      presenceMeta: { current_page: 1, per_page: 20, total: 0, last_page: 1 },
+      presencePerPageOptions: [10, 20, 50],
     };
   },
   computed: {
+    presenceDialogTitle() {
+      const t = this.presenceTarget;
+      if (!t) return '出勤记录';
+      const name = (t.real_name && String(t.real_name).trim()) || t.account || '';
+
+      return name ? `出勤记录 — ${name}` : '出勤记录';
+    },
     orgAssignTitle() {
       const a = this.orgAssignTarget && this.orgAssignTarget.real_name;
       return a ? `分配职务 — ${a}` : '分配职务';
@@ -388,6 +490,12 @@ export default {
     this.fetchUsers(1);
   },
   methods: {
+    userRowIndex(index) {
+      const page = this.meta.current_page || 1;
+      const per = this.meta.per_page || 20;
+
+      return (page - 1) * per + index + 1;
+    },
     formatTs(ts) {
       if (!ts) return '';
       const d = new Date(ts * 1000);
@@ -402,6 +510,9 @@ export default {
         const params = { q: this.query.q, per_page: this.query.per_page, page };
         if (this.query.role_id != null && this.query.role_id !== '') {
           params.role_id = this.query.role_id;
+        }
+        if (this.query.presence_today != null && this.query.presence_today !== '') {
+          params.presence_today = this.query.presence_today;
         }
         const { data } = await window.axios.get('/admin/api/users', { params });
         this.rows = (data.data || []).map((u) => ({
@@ -419,6 +530,7 @@ export default {
     reset() {
       this.query.q = '';
       this.query.role_id = null;
+      this.query.presence_today = null;
       this.query.per_page = 20;
       this.fetchUsers(1);
     },
@@ -428,6 +540,55 @@ export default {
         this.roleFilterOptions = data.data || [];
       } catch (e) {
         this.roleFilterOptions = [];
+      }
+    },
+    openPresenceViewer(row) {
+      if (!row || !row.id) return;
+      this.presenceTarget = row;
+      this.presenceDateRange = null;
+      this.presenceQuery = { page: 1, per_page: 20 };
+      this.presenceMeta = { current_page: 1, per_page: 20, total: 0, last_page: 1 };
+      this.presenceRows = [];
+      this.presenceVisible = true;
+      this.fetchPresenceRecords(1);
+    },
+    onPresenceClosed() {
+      this.presenceTarget = null;
+      this.presenceRows = [];
+    },
+    onPresenceQuery() {
+      this.fetchPresenceRecords(1);
+    },
+    presenceDurationText(row) {
+      if (!row || row.duration_minutes == null) return '—';
+      const m = Number(row.duration_minutes);
+      if (Number.isNaN(m) || m <= 0) return '—';
+
+      return `${m} 分钟`;
+    },
+    async fetchPresenceRecords(page) {
+      if (!this.presenceTarget || !this.presenceTarget.id) return;
+      const p = page != null ? page : this.presenceMeta.current_page || 1;
+      this.presenceLoading = true;
+      this.presenceQuery.page = p;
+      try {
+        const params = {
+          page: this.presenceQuery.page,
+          per_page: this.presenceQuery.per_page,
+        };
+        if (this.presenceDateRange && this.presenceDateRange.length === 2) {
+          params.date_from = this.presenceDateRange[0];
+          params.date_to = this.presenceDateRange[1];
+        }
+        const { data } = await window.axios.get(`/admin/api/users/${this.presenceTarget.id}/presence-records`, {
+          params,
+        });
+        this.presenceRows = data.data || [];
+        this.presenceMeta = data.meta || this.presenceMeta;
+      } catch (e) {
+        this.$message.error(e?.response?.data?.message || '加载出勤记录失败');
+      } finally {
+        this.presenceLoading = false;
       }
     },
     roleOptionLabel(r) {

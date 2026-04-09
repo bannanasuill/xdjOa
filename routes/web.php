@@ -62,6 +62,9 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
         Route::get('/users', [UserService::class, 'apiIndex'])
             ->middleware('admin.perm:perm.admin.api.users.index')
             ->name('admin.api.users.index');
+        Route::get('/users/{adminUser}/presence-records', [UserService::class, 'apiUserPresenceRecords'])
+            ->middleware('admin.perm:perm.admin.api.users.index')
+            ->name('admin.api.users.presence-records');
         Route::post('/users', [UserService::class, 'apiStore'])
             ->middleware('admin.perm:perm.admin.api.users.store')
             ->name('admin.api.users.store');

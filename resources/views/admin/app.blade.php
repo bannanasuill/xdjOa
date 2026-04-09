@@ -17,6 +17,7 @@
     <script>
         window.__ADMIN_SITE_NAME__ = @json($adminSiteName ?? '洗多家后台');
         window.__ADMIN_FAVICON__ = @json($adminIconHref);
+        window.__BAIDU_MAP_BROWSER_AK__ = @json((string) config('services.baidu_map.browser_ak', ''));
     </script>
     <script>
         (function () {

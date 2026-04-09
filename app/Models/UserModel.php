@@ -29,6 +29,31 @@ class UserModel extends Authenticatable
     /** 具备此权限才允许登录并访问后台（超级管理员不受限） */
     public const ADMIN_PANEL_LOGIN_PERMISSION = 'perm.admin.login';
 
+    /** 用户列表「当下状态」筛选值（与 presence_today 展示文案对应）。 */
+    public const PRESENCE_FILTER_NOT_ARRIVED = 'not_arrived';
+
+    public const PRESENCE_FILTER_PRESENT = 'present';
+
+    public const PRESENCE_FILTER_OUTING = 'outing';
+
+    public const PRESENCE_FILTER_OFF_WORK = 'off_work';
+
+    public const PRESENCE_FILTER_UNKNOWN = 'unknown';
+
+    /**
+     * @return array<string, string> code => 中文标签
+     */
+    public static function adminListPresenceFilterOptions(): array
+    {
+        return [
+            self::PRESENCE_FILTER_NOT_ARRIVED => '未到岗',
+            self::PRESENCE_FILTER_PRESENT => '到岗',
+            self::PRESENCE_FILTER_OUTING => '外出',
+            self::PRESENCE_FILTER_OFF_WORK => '下班',
+            self::PRESENCE_FILTER_UNKNOWN => '其他',
+        ];
+    }
+
     public $timestamps = false;
 
     protected $table = 'users';
@@ -277,9 +302,9 @@ class UserModel extends Authenticatable
     }
 
     /**
-     * 用户管理列表查询构造器：全表 + 可选账号/姓名模糊 + 可选角色（user_roles.role_id）。
+     * 用户管理列表查询构造器：全表 + 可选账号/姓名模糊 + 可选角色 + 可选今日当下状态。
      */
-    public static function adminListQuery(string $keyword, ?int $roleId = null): Builder
+    public static function adminListQuery(string $keyword, ?int $roleId = null, ?string $presenceFilter = null): Builder
     {
         $query = static::query();
         $keyword = trim($keyword);
@@ -306,7 +331,135 @@ class UserModel extends Authenticatable
             }
         }
 
+        static::applyAdminListPresenceFilter($query, $presenceFilter);
+
         return $query;
+    }
+
+    /**
+     * 按今日考勤记录筛选「当下状态」（与 {@see presenceTodayMetaFromRecords} 一致，用于列表分页总数正确）。
+     */
+    public static function applyAdminListPresenceFilter(Builder $query, ?string $code, ?string $workDate = null): void
+    {
+        $code = $code !== null ? trim($code) : '';
+        if ($code === '') {
+            return;
+        }
+
+        $allowed = array_keys(static::adminListPresenceFilterOptions());
+        if (! in_array($code, $allowed, true)) {
+            return;
+        }
+
+        $t = 'user_presence_records';
+        if (! Schema::hasTable($t)) {
+            if ($code === self::PRESENCE_FILTER_NOT_ARRIVED) {
+                return;
+            }
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $workDate = $workDate !== null && $workDate !== '' ? substr($workDate, 0, 10) : date('Y-m-d');
+        $u = (new static)->getTable();
+
+        if ($code === self::PRESENCE_FILTER_NOT_ARRIVED) {
+            $query->whereNotExists(function ($sub) use ($t, $workDate, $u) {
+                $sub->selectRaw('1')
+                    ->from($t.' as upr')
+                    ->whereColumn('upr.user_id', $u.'.id')
+                    ->where('upr.work_date', $workDate)
+                    ->where('upr.status', 1);
+            });
+
+            return;
+        }
+
+        if ($code === self::PRESENCE_FILTER_OUTING) {
+            $query->whereExists(function ($sub) use ($t, $workDate, $u) {
+                $sub->selectRaw('1')
+                    ->from($t.' as o')
+                    ->whereColumn('o.user_id', $u.'.id')
+                    ->where('o.work_date', $workDate)
+                    ->where('o.status', 1)
+                    ->where('o.record_type', 2)
+                    ->whereNull('o.end_at');
+            });
+
+            return;
+        }
+
+        static::applyAdminListPresenceFilterWithNoOpenOuting($query, $t, $workDate, $u);
+
+        if ($code === self::PRESENCE_FILTER_OFF_WORK) {
+            static::applyAdminListLastRecordTypes($query, [3], $t, $workDate, $u);
+
+            return;
+        }
+
+        if ($code === self::PRESENCE_FILTER_PRESENT) {
+            static::applyAdminListLastRecordTypes($query, [1, 2], $t, $workDate, $u);
+
+            return;
+        }
+
+        if ($code === self::PRESENCE_FILTER_UNKNOWN) {
+            static::applyAdminListLastRecordTypes($query, [1, 2, 3], $t, $workDate, $u, true);
+        }
+    }
+
+    /**
+     * @param  list<int>  $types
+     * @param  bool  $negate  true：最后一条记录的 record_type 不在 $types 中
+     */
+    protected static function applyAdminListLastRecordTypes(
+        Builder $query,
+        array $types,
+        string $presenceTable,
+        string $workDate,
+        string $usersTable,
+        bool $negate = false,
+    ): void {
+        $query->whereExists(function ($sub) use ($types, $presenceTable, $workDate, $usersTable, $negate) {
+            $sub->selectRaw('1')
+                ->from($presenceTable.' as upr')
+                ->whereColumn('upr.user_id', $usersTable.'.id')
+                ->where('upr.work_date', $workDate)
+                ->where('upr.status', 1);
+            if ($negate) {
+                $sub->whereNotIn('upr.record_type', $types);
+            } else {
+                $sub->whereIn('upr.record_type', $types);
+            }
+            $sub->whereNotExists(function ($sub2) use ($presenceTable, $workDate) {
+                $sub2->selectRaw('1')
+                    ->from($presenceTable.' as upr2')
+                    ->whereColumn('upr2.user_id', 'upr.user_id')
+                    ->whereColumn('upr2.work_date', 'upr.work_date')
+                    ->where('upr2.status', 1)
+                    ->where(function ($w) {
+                        $w->whereColumn('upr2.start_at', '>', 'upr.start_at')
+                            ->orWhere(function ($w2) {
+                                $w2->whereColumn('upr2.start_at', 'upr.start_at')
+                                    ->whereColumn('upr2.id', '>', 'upr.id');
+                            });
+                    });
+            });
+        });
+    }
+
+    protected static function applyAdminListPresenceFilterWithNoOpenOuting(Builder $query, string $t, string $workDate, string $u): void
+    {
+        $query->whereNotExists(function ($sub) use ($t, $workDate, $u) {
+            $sub->selectRaw('1')
+                ->from($t.' as o')
+                ->whereColumn('o.user_id', $u.'.id')
+                ->where('o.work_date', $workDate)
+                ->where('o.status', 1)
+                ->where('o.record_type', 2)
+                ->whereNull('o.end_at');
+        });
     }
 
     /**
@@ -799,9 +952,9 @@ class UserModel extends Authenticatable
      *
      * @return array{data: list<array<string, mixed>>, paginator: \Illuminate\Pagination\LengthAwarePaginator}
      */
-    public static function paginatedAdminApiList(string $keyword, ?int $roleId, int $perPage): array
+    public static function paginatedAdminApiList(string $keyword, ?int $roleId, int $perPage, ?string $presenceFilter = null): array
     {
-        $paginator = static::adminListQuery($keyword, $roleId)
+        $paginator = static::adminListQuery($keyword, $roleId, $presenceFilter)
             ->orderBy('id')
             ->paginate($perPage);
 

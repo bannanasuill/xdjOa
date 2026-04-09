@@ -5,13 +5,12 @@ namespace App\Services;
 use App\Models\AttendanceRuleModel;
 use App\Models\StoreModel;
 use App\Models\UserModel;
-use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * 员工到岗打卡前：按考勤规则（时间窗口、门店范围、拍照）判断是否允许。
+ * 员工到岗打卡前：按考勤规则（门店范围、拍照等）判断是否允许；**不校验**上班/下班时间。
  */
 class AttendanceArrivalChecker
 {
@@ -40,7 +39,7 @@ class AttendanceArrivalChecker
         }
 
         $workDate = date('Y-m-d', $now);
-        $ctx = $this->resolveContext($user, $workDate, $now, $longitude, $latitude, $requestStoreId);
+        $ctx = $this->resolveContext($user, $workDate, $longitude, $latitude, $requestStoreId);
         if (isset($ctx['error_code'])) {
             return ['ok' => false, 'code' => (int) $ctx['error_code'], 'message' => (string) $ctx['error_message']];
         }
@@ -49,11 +48,6 @@ class AttendanceArrivalChecker
         $rule = $this->matchRule($rules, $ctx['store_id'], $ctx['position_id']);
         if ($rule === null) {
             return ['ok' => true];
-        }
-
-        $timeResult = $this->checkTimeWindow($rule, $now);
-        if ($timeResult !== null) {
-            return $timeResult;
         }
 
         if ((int) $rule->need_photo === 1) {
@@ -79,7 +73,6 @@ class AttendanceArrivalChecker
     private function resolveContext(
         UserModel $user,
         string $workDate,
-        int $now,
         ?float $longitude,
         ?float $latitude,
         ?int $requestStoreId,
@@ -221,35 +214,6 @@ class AttendanceArrivalChecker
             }
 
             return $r;
-        }
-
-        return null;
-    }
-
-    /**
-     * @return array{ok: false, code: int, message: string}|null
-     */
-    private function checkTimeWindow(AttendanceRuleModel $rule, int $now): ?array
-    {
-        $tz = (string) config('app.timezone', 'Asia/Shanghai');
-        $tNow = Carbon::createFromTimestamp($now)->timezone($tz);
-        $dateStr = $tNow->toDateString();
-        $wsRaw = $rule->work_start_time;
-        $weRaw = $rule->work_end_time;
-        if ($wsRaw === null || $weRaw === null) {
-            return null;
-        }
-        $ws = Carbon::parse($dateStr.' '.(string) $wsRaw, $tz);
-        $we = Carbon::parse($dateStr.' '.(string) $weRaw, $tz);
-        if ($we->lessThanOrEqualTo($ws)) {
-            $we->addDay();
-        }
-
-        if ($tNow->lt($ws)) {
-            return ['ok' => false, 'code' => 1020, 'message' => '尚未到上班时间，暂时无法到岗打卡'];
-        }
-        if ($tNow->gt($we)) {
-            return ['ok' => false, 'code' => 1022, 'message' => '已超过规定的下班时间，无法到岗打卡'];
         }
 
         return null;

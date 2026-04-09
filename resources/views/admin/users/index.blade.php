@@ -26,9 +26,16 @@
                         <option value="{{ $r['id'] }}" @selected((int) ($filterRoleId ?? 0) === (int) ($r['id'] ?? 0))>{{ $r['name'] }}{{ !empty($r['is_system']) ? '（系统）' : '' }}</option>
                     @endforeach
                 </select>
+                <label class="admin-sr-only" for="admin-users-presence">当下状态</label>
+                <select name="presence_today" id="admin-users-presence" class="admin-form__input admin-panel__search-input" style="max-width:10rem;">
+                    <option value="">全部状态</option>
+                    @foreach ($presenceFilterOptions ?? [] as $pCode => $pLabel)
+                        <option value="{{ $pCode }}" @selected(($filterPresenceToday ?? '') === $pCode)>{{ $pLabel }}</option>
+                    @endforeach
+                </select>
                 <button type="submit" class="admin-btn">搜索</button>
                 @php
-                    $hasListFilters = $searchQuery !== '' || !empty($filterRoleId);
+                    $hasListFilters = $searchQuery !== '' || !empty($filterRoleId) || ($filterPresenceToday ?? '') !== '';
                 @endphp
                 @if ($hasListFilters)
                     <a href="{{ route('admin.users.index', ['per_page' => $perPage]) }}" class="admin-btn admin-btn--muted">清除</a>
@@ -41,6 +48,9 @@
         @endif
         @if ($errors->has('role_id'))
             <p class="admin-alert admin-alert--error admin-panel__alert" role="alert">{{ $errors->first('role_id') }}</p>
+        @endif
+        @if ($errors->has('presence_today'))
+            <p class="admin-alert admin-alert--error admin-panel__alert" role="alert">{{ $errors->first('presence_today') }}</p>
         @endif
         @if (session('success'))
             <p id="admin-success-alert" class="admin-alert admin-alert--success" role="status">{{ session('success') }}</p>
@@ -56,22 +66,19 @@
             <table class="admin-table">
                 <thead>
                     <tr>
-                        <th scope="col">ID</th>
+                        <th scope="col">序号</th>
                         <th scope="col">姓名</th>
-                        <th scope="col">账号</th>
                         <th scope="col">手机</th>
                         <th scope="col">当下状态</th>
                         <th scope="col">状态</th>
-                        <th scope="col">创建时间</th>
                         <th scope="col" class="admin-table__col-actions">操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($users as $user)
                         <tr>
-                            <td>{{ $user->id }}</td>
+                            <td>{{ $users->firstItem() + $loop->index }}</td>
                             <td>{{ $user->real_name ?: '—' }}</td>
-                            <td>{{ $user->account }}</td>
                             <td>{{ $user->phone ?: '—' }}</td>
                             <td>
                                 @php
@@ -118,13 +125,6 @@
                                     </form>
                                 @endif
                             </td>
-                            <td class="admin-table__num">
-                                @if ($user->created_at)
-                                    {{ date('Y-m-d H:i:s', (int) $user->created_at) }}
-                                @else
-                                    —
-                                @endif
-                            </td>
                             <td class="admin-table__actions">
                                 @if ($user->isSuperAdminAccount())
                                     <span class="admin-table__muted" title="超级管理员">—</span>
@@ -135,7 +135,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="admin-table__empty">
+                            <td colspan="6" class="admin-table__empty">
                                 @if ($searchQuery !== '')
                                     未找到匹配的用户
                                 @else

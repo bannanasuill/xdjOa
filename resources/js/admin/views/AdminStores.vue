@@ -102,11 +102,23 @@
           </el-select>
         </el-form-item>
         <el-form-item label="详细地址">
-          <el-input
-            v-model="form.address"
-            maxlength="255"
-            placeholder="尽量写完整（省市区+街道门牌），便于解析经纬度"
-          />
+          <div class="admin-stores-address-row">
+            <el-input
+              v-model="form.address"
+              maxlength="255"
+              class="admin-stores-address-input"
+              placeholder="可输入或点击下方地图选点"
+            />
+            <el-button
+              v-if="$canPerm('perm.admin.api.stores.store') || $canPerm('perm.admin.api.stores.update')"
+              size="small"
+              :disabled="!baiduBrowserAkConfigured"
+              @click="openMapPicker"
+            >地图选点</el-button>
+          </div>
+          <div v-if="!baiduBrowserAkConfigured" class="admin-form-hint">
+            地图选点需在 .env 配置 BAIDU_MAP_BROWSER_AK（百度「浏览器端」AK，Referer 填后台域名）。
+          </div>
         </el-form-item>
         <el-form-item label="经纬度">
           <div class="admin-stores-latlng-block">
@@ -121,7 +133,7 @@
               @click="geocodeFromBaidu"
             >百度地图解析</el-button>
             <div class="admin-form-hint">
-              根据「详细地址」请求百度地理编码（GCJ-02）。请在 .env 配置 BAIDU_MAP_AK，且须为百度开放平台「服务端」密钥并配置服务器 IP 白名单；勿用仅校验 Referer 的浏览器端 AK。
+              「百度地图解析」根据文字地址请求服务端地理编码（GCJ-02），需 BAIDU_MAP_AK（服务端 IP 白名单）。「地图选点」需另配 BAIDU_MAP_BROWSER_AK。
             </div>
           </div>
         </el-form-item>
@@ -140,11 +152,136 @@
         <el-button size="small" type="primary" :loading="formSubmitting" @click="submitForm">保存</el-button>
       </span>
     </el-dialog>
+
+    <el-dialog
+      title="地图选点"
+      :visible.sync="mapPickerVisible"
+      width="720px"
+      append-to-body
+      custom-class="admin-stores-map-dialog"
+      @opened="onMapPickerDialogOpened"
+    >
+      <div v-loading="mapPickerLoading" class="admin-bmap-picker-wrap">
+        <p class="admin-form-hint admin-bmap-picker-hint">
+          可先输入地址「定位」到大致区域，再点击地图或拖动标记微调。点「确定选点」后，会回填到店铺表单中的「详细地址」「经度」「纬度」（GCJ-02）。
+        </p>
+        <div class="admin-bmap-picker-search">
+          <el-input
+            v-model="mapPickerSearchText"
+            size="small"
+            clearable
+            placeholder="输入地址关键词（省市区+路名等），粗略定位"
+            class="admin-bmap-picker-search-input"
+            @keyup.enter.native="locateMapPickerByAddress"
+          />
+          <el-input
+            v-model="mapPickerSearchCity"
+            size="small"
+            clearable
+            placeholder="城市（可选）"
+            class="admin-bmap-picker-city-input"
+          />
+          <el-button size="small" type="primary" :loading="mapPickerGeocodeBusy" @click="locateMapPickerByAddress">
+            定位
+          </el-button>
+        </div>
+        <div ref="bmapPickerContainer" class="admin-bmap-picker"></div>
+      </div>
+      <span slot="footer" class="admin-dialog-footer">
+        <el-button size="small" @click="mapPickerVisible = false">取消</el-button>
+        <el-button size="small" type="primary" @click="confirmMapPicker">确定选点</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import adminTableFixedHeader from '../mixins/adminTableFixedHeader';
+
+/** 百度 JS 与坐标转换脚本，全页只加载一次 */
+let baiduMapScriptPromise = null;
+
+function loadBaiduMapScriptsOnce() {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('no window'));
+  }
+  if (window.BMap && window.BMap.Convertor) {
+    return Promise.resolve();
+  }
+  if (baiduMapScriptPromise) {
+    return baiduMapScriptPromise;
+  }
+  const ak = String(window.__BAIDU_MAP_BROWSER_AK__ || '').trim();
+  if (!ak) {
+    return Promise.reject(new Error('no browser ak'));
+  }
+  baiduMapScriptPromise = new Promise((resolve, reject) => {
+    const onApiReady = () => {
+      delete window.__xdjBmapPickCb;
+      const s2 = document.createElement('script');
+      s2.src = 'https://api.map.baidu.com/library/Convertor/1.2/src/Convertor_min.js';
+      s2.onload = () => resolve();
+      s2.onerror = () => {
+        baiduMapScriptPromise = null;
+        reject(new Error('convertor'));
+      };
+      document.head.appendChild(s2);
+    };
+    window.__xdjBmapPickCb = onApiReady;
+    const s = document.createElement('script');
+    s.src = `https://api.map.baidu.com/api?v=3.0&ak=${encodeURIComponent(ak)}&callback=__xdjBmapPickCb`;
+    s.onerror = () => {
+      delete window.__xdjBmapPickCb;
+      baiduMapScriptPromise = null;
+      reject(new Error('bmap api'));
+    };
+    document.head.appendChild(s);
+  });
+  return baiduMapScriptPromise;
+}
+
+/** BMap.Convertor.translate 回调为 { status:0, points:[] }，勿当作点数组 */
+function bmapTranslateFirstPoint(data, fallback) {
+  if (!data) {
+    return fallback;
+  }
+  if (data.status === 0 && data.points && data.points.length) {
+    return data.points[0];
+  }
+  if (Array.isArray(data) && data.length) {
+    return data[0];
+  }
+  return fallback;
+}
+
+/** 逆地理编码结果取完整地址（兼容 address 或 addressComponents 拼接） */
+function formatBaiduGeocoderAddress(rs) {
+  if (!rs) {
+    return '';
+  }
+  if (typeof rs.getAddress === 'function') {
+    try {
+      const s = rs.getAddress();
+      if (s) {
+        return String(s).trim();
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  const direct = rs.address != null ? String(rs.address).trim() : '';
+  if (direct) {
+    return direct;
+  }
+  const c = rs.addressComponents;
+  if (!c || typeof c !== 'object') {
+    return '';
+  }
+  const parts = [c.province, c.city, c.district, c.street, c.streetNumber]
+    .map((x) => (x != null ? String(x).trim() : ''))
+    .filter(Boolean);
+  return parts.join('');
+}
 
 const emptyForm = () => ({
   code: '',
@@ -176,7 +313,22 @@ export default {
       geocodeBusy: false,
       statusBusyId: null,
       deleteBusyId: null,
+      mapPickerVisible: false,
+      mapPickerLoading: false,
+      bmapPickerMap: null,
+      bmapPickerMarker: null,
+      mapPickerSearchText: '',
+      mapPickerSearchCity: '',
+      mapPickerGeocodeBusy: false,
     };
+  },
+  computed: {
+    baiduBrowserAkConfigured() {
+      if (typeof window === 'undefined') {
+        return false;
+      }
+      return String(window.__BAIDU_MAP_BROWSER_AK__ || '').trim() !== '';
+    },
   },
   created() {
     this.fetchList();
@@ -256,6 +408,160 @@ export default {
     },
     onFormClosed() {
       this.editingId = null;
+    },
+    openMapPicker() {
+      if (!this.baiduBrowserAkConfigured) {
+        this.$message.warning('请先在 .env 配置 BAIDU_MAP_BROWSER_AK（百度「浏览器端」AK）');
+        return;
+      }
+      this.mapPickerSearchText = (this.form.address || '').trim();
+      this.mapPickerSearchCity = '';
+      this.mapPickerVisible = true;
+    },
+    locateMapPickerByAddress() {
+      const { BMap: B } = window;
+      const text = (this.mapPickerSearchText || '').trim();
+      if (text.length < 2) {
+        this.$message.warning('请输入更具体的地址（至少 2 个字符）');
+        return;
+      }
+      if (!B || !this.bmapPickerMap || !this.bmapPickerMarker) {
+        this.$message.warning('地图尚未就绪，请稍候再试');
+        return;
+      }
+      const city = (this.mapPickerSearchCity || '').trim();
+      this.mapPickerGeocodeBusy = true;
+      const geocoder = new B.Geocoder();
+      const clearBusy = () => {
+        this.mapPickerGeocodeBusy = false;
+      };
+      const timer = setTimeout(clearBusy, 15000);
+      geocoder.getPoint(
+        text,
+        (point) => {
+          clearTimeout(timer);
+          clearBusy();
+          if (!point) {
+            this.$message.warning('未找到该地址，请换关键词或直接在地图上点击');
+            return;
+          }
+          this.bmapPickerMap.centerAndZoom(point, 17);
+          this.bmapPickerMarker.setPosition(point);
+        },
+        city || ''
+      );
+    },
+    async onMapPickerDialogOpened() {
+      this.mapPickerLoading = true;
+      try {
+        await loadBaiduMapScriptsOnce();
+        await this.$nextTick();
+        this.buildOrRefreshBmapPicker();
+        await this.syncBmapPickerFromFormCoords();
+      } catch (e) {
+        this.$message.error('地图加载失败，请检查 BAIDU_MAP_BROWSER_AK、Referer 白名单与网络');
+        this.mapPickerVisible = false;
+      } finally {
+        this.mapPickerLoading = false;
+        this.$nextTick(() => {
+          if (this.bmapPickerMap) {
+            this.bmapPickerMap.checkResize();
+          }
+        });
+      }
+    },
+    buildOrRefreshBmapPicker() {
+      const { BMap: B } = window;
+      const el = this.$refs.bmapPickerContainer;
+      if (!B || !el) {
+        return;
+      }
+      const defaultPt = new B.Point(116.404269, 39.915378);
+      if (!this.bmapPickerMap) {
+        const map = new B.Map(el);
+        map.enableScrollWheelZoom(true);
+        map.addControl(new B.NavigationControl());
+        const marker = new B.Marker(defaultPt);
+        marker.enableDragging();
+        map.addOverlay(marker);
+        map.addEventListener('click', (e) => {
+          marker.setPosition(e.point);
+        });
+        this.bmapPickerMap = map;
+        this.bmapPickerMarker = marker;
+      }
+    },
+    syncBmapPickerFromFormCoords() {
+      return new Promise((resolve) => {
+        const { BMap: B } = window;
+        const map = this.bmapPickerMap;
+        const marker = this.bmapPickerMarker;
+        if (!B || !map || !marker) {
+          resolve();
+          return;
+        }
+        const lng = parseFloat(this.form.longitude);
+        const lat = parseFloat(this.form.latitude);
+        const defaultPt = new B.Point(116.404269, 39.915378);
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+          map.centerAndZoom(defaultPt, 12);
+          marker.setPosition(defaultPt);
+          resolve();
+          return;
+        }
+        const gcjPt = new B.Point(lng, lat);
+        const convertor = new B.Convertor();
+        convertor.translate([gcjPt], 3, 5, (data) => {
+          const pt = bmapTranslateFirstPoint(data, defaultPt);
+          map.centerAndZoom(pt, 16);
+          marker.setPosition(pt);
+          resolve();
+        });
+      });
+    },
+    confirmMapPicker() {
+      const { BMap: B } = window;
+      const marker = this.bmapPickerMarker;
+      const map = this.bmapPickerMap;
+      if (!B || !marker || !map) {
+        this.mapPickerVisible = false;
+        return;
+      }
+      const bdPt = marker.getPosition();
+      const geocoder = new B.Geocoder();
+      const convertor = new B.Convertor();
+      geocoder.getLocation(bdPt, (rs) => {
+        let addr = formatBaiduGeocoderAddress(rs);
+        if (!addr) {
+          addr = (this.mapPickerSearchText || '').trim();
+        }
+        if (!addr) {
+          addr = (this.form.address || '').trim();
+        }
+        if (addr.length > 255) {
+          addr = addr.slice(0, 255);
+        }
+        convertor.translate([bdPt], 5, 3, (data) => {
+          const p = bmapTranslateFirstPoint(data, null);
+          if (!p) {
+            const code = data && data.status != null ? `（状态码 ${data.status}）` : '';
+            this.$message.error(`坐标转换失败${code}，请重试`);
+            return;
+          }
+          const lon = String(Math.round(p.lng * 1e6) / 1e6);
+          const lat = String(Math.round(p.lat * 1e6) / 1e6);
+          this.$set(this.form, 'longitude', lon);
+          this.$set(this.form, 'latitude', lat);
+          this.$set(this.form, 'address', addr);
+          const hasAddr = addr.length > 0;
+          this.$message.success(
+            hasAddr ? '已回填详细地址与经纬度（GCJ-02）' : '已回填经纬度（GCJ-02），请补充详细地址'
+          );
+          this.$nextTick(() => {
+            this.mapPickerVisible = false;
+          });
+        });
+      });
     },
     geocodePayload() {
       const payload = {
@@ -409,5 +715,50 @@ export default {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   width: 100%;
+}
+
+.admin-stores-address-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.admin-stores-address-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-bmap-picker-wrap {
+  min-height: 420px;
+}
+
+.admin-bmap-picker-hint {
+  margin: 0 0 8px;
+}
+
+.admin-bmap-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-bmap-picker-search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.admin-bmap-picker-city-input {
+  width: 120px;
+}
+
+.admin-bmap-picker {
+  width: 100%;
+  height: 400px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #e8ecf0;
 }
 </style>

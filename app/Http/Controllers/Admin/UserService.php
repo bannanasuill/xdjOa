@@ -126,6 +126,8 @@ class UserService extends Controller
             'perPage' => $payload['perPage'],
             'perPageOptions' => [10, 20, 50, 100],
             'presenceMetaMap' => $payload['presenceMetaMap'] ?? [],
+            'presenceFilterOptions' => UserModel::adminListPresenceFilterOptions(),
+            'filterPresenceToday' => $payload['filterPresenceToday'] ?? null,
         ]);
     }
 
@@ -145,6 +147,103 @@ class UserService extends Controller
                 'last_page' => $paginator->lastPage(),
             ],
         ]);
+    }
+
+    /**
+     * 用户出勤记录（按条分页）：可选业务日期区间，默认按日期、时间倒序。
+     */
+    public function apiUserPresenceRecords(Request $request, UserModel $adminUser): JsonResponse
+    {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+        ]);
+        if (
+            ! empty($validated['date_from'])
+            && ! empty($validated['date_to'])
+            && $validated['date_to'] < $validated['date_from']
+        ) {
+            return response()->json(['message' => '结束日期不能早于开始日期'], 422);
+        }
+
+        $t = 'user_presence_records';
+        if (! Schema::hasTable($t)) {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => 20,
+                    'total' => 0,
+                    'last_page' => 1,
+                ],
+            ]);
+        }
+
+        $perPage = (int) ($validated['per_page'] ?? 20);
+        $perPage = min(100, max(1, $perPage));
+
+        $q = DB::table($t)
+            ->where('user_id', (int) $adminUser->id)
+            ->where('status', 1);
+
+        if (! empty($validated['date_from'])) {
+            $q->whereDate('work_date', '>=', $validated['date_from']);
+        }
+        if (! empty($validated['date_to'])) {
+            $q->whereDate('work_date', '<=', $validated['date_to']);
+        }
+
+        $paginator = $q->orderByDesc('work_date')
+            ->orderByDesc('start_at')
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        $data = $paginator->getCollection()->map(static function ($r) {
+            $start = (int) ($r->start_at ?? 0);
+            $endRaw = $r->end_at ?? null;
+            $end = $endRaw !== null && $endRaw !== '' ? (int) $endRaw : null;
+            $duration = null;
+            if ($end !== null && $end >= $start) {
+                $duration = (int) floor(($end - $start) / 60);
+            }
+
+            return [
+                'id' => (int) ($r->id ?? 0),
+                'work_date' => (string) ($r->work_date ?? ''),
+                'record_type' => (int) ($r->record_type ?? 0),
+                'record_type_label' => self::presenceRecordTypeLabel((int) ($r->record_type ?? 0)),
+                'start_at' => $start,
+                'end_at' => $end,
+                'duration_minutes' => $duration,
+                'reason' => $r->reason,
+                'address' => $r->address,
+                'longitude' => $r->longitude,
+                'latitude' => $r->latitude,
+                'source' => (int) ($r->source ?? 1),
+            ];
+        })->values()->all();
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+            ],
+        ]);
+    }
+
+    private static function presenceRecordTypeLabel(int $type): string
+    {
+        return match ($type) {
+            1 => '到岗',
+            2 => '外出',
+            3 => '下班',
+            default => '其他',
+        };
     }
 
     /** Blade 新增页。 */
@@ -572,6 +671,7 @@ class UserService extends Controller
             'q' => ['nullable', 'string', 'max:100'],
             'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50, 100])],
             'role_id' => ['nullable', 'integer', 'min:1'],
+            'presence_today' => ['nullable', 'string', Rule::in(array_keys(UserModel::adminListPresenceFilterOptions()))],
         ];
         if (RoleModel::isTablePresent()) {
             $rules['role_id'][] = Rule::exists('roles', 'id');
@@ -700,8 +800,11 @@ class UserService extends Controller
         $keyword = trim((string) ($validated['q'] ?? ''));
         $perPage = (int) ($validated['per_page'] ?? 20);
         $roleId = isset($validated['role_id']) ? (int) $validated['role_id'] : null;
+        $presenceToday = isset($validated['presence_today']) && is_string($validated['presence_today']) && $validated['presence_today'] !== ''
+            ? $validated['presence_today']
+            : null;
 
-        $users = UserModel::adminListQuery($keyword, $roleId)
+        $users = UserModel::adminListQuery($keyword, $roleId, $presenceToday)
             ->orderBy('id')
             ->paginate($perPage)
             ->withQueryString();
@@ -713,6 +816,7 @@ class UserService extends Controller
             'users' => $users,
             'searchQuery' => $keyword,
             'filterRoleId' => $roleId,
+            'filterPresenceToday' => $presenceToday,
             'perPage' => $perPage,
             'presenceMetaMap' => $presenceMetaMap,
         ];
@@ -727,8 +831,11 @@ class UserService extends Controller
         $keyword = trim((string) ($validated['q'] ?? ''));
         $perPage = (int) ($validated['per_page'] ?? 20);
         $roleId = isset($validated['role_id']) ? (int) $validated['role_id'] : null;
+        $presenceToday = isset($validated['presence_today']) && is_string($validated['presence_today']) && $validated['presence_today'] !== ''
+            ? $validated['presence_today']
+            : null;
 
-        return UserModel::paginatedAdminApiList($keyword, $roleId, $perPage);
+        return UserModel::paginatedAdminApiList($keyword, $roleId, $perPage, $presenceToday);
     }
 
     /**
