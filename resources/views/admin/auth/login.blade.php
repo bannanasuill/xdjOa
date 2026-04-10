@@ -21,7 +21,7 @@
         <div class="brand">
             <img src="{{ $adminIconHref }}" alt="" class="brand__logo">
             <h1>{{ $adminSiteName ?? '洗多家后台' }}</h1>
-            <p>请使用账号和密码登录</p>
+            <p>请使用账号或姓名与密码登录</p>
         </div>
 
         @if ($errors->any())
@@ -33,7 +33,7 @@
         <form id="login-form" method="post" action="{{ url('/login') }}" novalidate>
             @csrf
             <div class="field">
-                <label for="account">账号</label>
+                <label for="account">账号或姓名</label>
                 <input
                     id="account"
                     name="account"

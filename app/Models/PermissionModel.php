@@ -56,4 +56,57 @@ class PermissionModel extends Model
             ->values()
             ->all();
     }
+
+    /**
+     * 为已选权限 id 补齐链路上的「菜单」祖先（parent_id 向上直到根）。
+     * 仅勾接口时路由 meta / 侧栏依赖的 perm.admin.* 菜单码会一并写入，避免无法进页。
+     *
+     * @param  array<int, int|string>  $permissionIds
+     * @return list<int>
+     */
+    public static function mergeAncestorMenuPermissionIds(array $permissionIds): array
+    {
+        if (! Schema::hasTable((new static)->getTable())) {
+            return [];
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $permissionIds), static fn (int $id) => $id > 0)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $rows = static::query()->get(['id', 'parent_id', 'type']);
+        $byId = [];
+        foreach ($rows as $r) {
+            $id = (int) $r->id;
+            $parent = $r->parent_id;
+            $byId[$id] = [
+                'parent_id' => $parent !== null && (int) $parent > 0 ? (int) $parent : null,
+                'type' => strtolower(trim((string) ($r->type ?? ''))),
+            ];
+        }
+
+        $out = [];
+        foreach ($ids as $startId) {
+            $out[$startId] = true;
+            $current = $startId;
+            $guard = 0;
+            while ($current > 0 && isset($byId[$current]) && $guard < 256) {
+                $guard++;
+                $parentId = $byId[$current]['parent_id'];
+                if ($parentId === null || $parentId <= 0 || ! isset($byId[$parentId])) {
+                    break;
+                }
+                if ($byId[$parentId]['type'] === 'menu') {
+                    $out[$parentId] = true;
+                }
+                $current = $parentId;
+            }
+        }
+
+        $merged = array_map('intval', array_keys($out));
+        sort($merged);
+
+        return $merged;
+    }
 }

@@ -90,9 +90,33 @@ class AuthService extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = UserModel::findByAccount($credentials['account']);
+        $loginInput = $credentials['account'];
+        $resolved = UserModel::resolveForAdminLogin($loginInput);
+        $user = $resolved['user'];
 
-        if ($locked = $this->ensureLoginNotRateLimited($request, $credentials['account'], $user)) {
+        if ($resolved['ambiguous_real_name']) {
+            if ($locked = $this->ensureLoginNotRateLimited($request, $loginInput, null)) {
+                return $locked;
+            }
+            $this->hitAdminLoginRateLimitOnFailure($request, $loginInput, null);
+
+            UserLogModel::insertAuthAudit(
+                $request,
+                null,
+                'login',
+                0,
+                '登录失败：姓名对应多个账号。',
+                ['account' => $loginInput],
+                $loginInput,
+                null,
+            );
+
+            return back()
+                ->withErrors(['account' => '该姓名对应多个账号，请使用登录账号登录。'])
+                ->withInput($request->only('account'));
+        }
+
+        if ($locked = $this->ensureLoginNotRateLimited($request, $loginInput, $user)) {
             return $locked;
         }
 
@@ -101,7 +125,7 @@ class AuthService extends Controller
             || (int) $user->status !== 1
             || ! Hash::check($credentials['password'], $user->password)
         ) {
-            $this->hitAdminLoginRateLimitOnFailure($request, $credentials['account'], $user);
+            $this->hitAdminLoginRateLimitOnFailure($request, $loginInput, $user);
 
             UserLogModel::insertAuthAudit(
                 $request,
@@ -109,8 +133,8 @@ class AuthService extends Controller
                 'login',
                 0,
                 '登录失败：账号或密码错误，或账号已禁用。',
-                ['account' => $credentials['account']],
-                $credentials['account'],
+                ['account' => $loginInput, 'resolved_account' => $user?->account],
+                $loginInput,
                 $user?->real_name ?: null,
             );
 
@@ -120,7 +144,7 @@ class AuthService extends Controller
         }
 
         if (! $user->canAccessAdminPanel()) {
-            $this->hitAdminLoginRateLimitOnFailure($request, $credentials['account'], $user);
+            $this->hitAdminLoginRateLimitOnFailure($request, $loginInput, $user);
 
             UserLogModel::insertAuthAudit(
                 $request,
@@ -128,8 +152,8 @@ class AuthService extends Controller
                 'login',
                 0,
                 '登录失败：无后台登录权限。',
-                ['account' => $credentials['account']],
-                $credentials['account'],
+                ['account' => $loginInput, 'resolved_account' => $user->account],
+                $loginInput,
                 $user->real_name ?: null,
             );
 
@@ -138,7 +162,7 @@ class AuthService extends Controller
                 ->withInput($request->only('account'));
         }
 
-        $this->clearAdminLoginRateLimit($request, $credentials['account'], $user);
+        $this->clearAdminLoginRateLimit($request, $loginInput, $user);
 
         Auth::login($user);
         $request->session()->regenerate();
@@ -151,6 +175,7 @@ class AuthService extends Controller
             '登录成功。',
             [
                 'account' => $user->account,
+                'login_input' => $loginInput,
             ],
         );
 

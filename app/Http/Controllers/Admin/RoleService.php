@@ -118,7 +118,9 @@ class RoleService extends Controller
             return response()->json(['permission_ids' => []]);
         }
 
-        return response()->json(['permission_ids' => $role->getStoredPermissionIds()]);
+        $ids = PermissionModel::mergeAncestorMenuPermissionIds($role->getStoredPermissionIds());
+
+        return response()->json(['permission_ids' => $ids]);
     }
 
     public function apiRolePermissionsSync(Request $request, RoleModel $role): JsonResponse
@@ -136,7 +138,7 @@ class RoleService extends Controller
             'permission_ids.*' => ['integer', 'exists:permissions,id'],
         ]);
 
-        $ids = array_values(array_unique(array_map('intval', $validated['permission_ids'])));
+        $ids = PermissionModel::mergeAncestorMenuPermissionIds($validated['permission_ids']);
 
         $role->syncExplicitPermissionIds($ids);
 

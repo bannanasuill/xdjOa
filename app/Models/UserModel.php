@@ -236,8 +236,12 @@ class UserModel extends Authenticatable
             return [];
         }
 
+        $mergedIds = PermissionModel::mergeAncestorMenuPermissionIds(
+            $permIds->map(static fn ($id) => (int) $id)->all()
+        );
+
         return DB::table($tP)
-            ->whereIn('id', $permIds)
+            ->whereIn('id', $mergedIds)
             ->whereNotNull('code')
             ->where('code', '!=', '')
             ->orderBy('id')
@@ -605,6 +609,40 @@ class UserModel extends Authenticatable
     public static function findByAccount(string $account): ?self
     {
         return static::query()->where('account', $account)->first();
+    }
+
+    /**
+     * 后台登录解析：先精确匹配账号，再精确匹配姓名（real_name）；姓名重复时不返回用户，由调用方提示改用账号。
+     *
+     * @return array{user: ?self, ambiguous_real_name: bool}
+     */
+    public static function resolveForAdminLogin(string $login): array
+    {
+        $login = trim($login);
+        if ($login === '') {
+            return ['user' => null, 'ambiguous_real_name' => false];
+        }
+
+        $byAccount = static::query()->where('account', $login)->first();
+        if ($byAccount !== null) {
+            return ['user' => $byAccount, 'ambiguous_real_name' => false];
+        }
+
+        $byName = static::query()
+            ->where('real_name', $login)
+            ->whereNotNull('real_name')
+            ->where('real_name', '!=', '')
+            ->get();
+
+        if ($byName->count() > 1) {
+            return ['user' => null, 'ambiguous_real_name' => true];
+        }
+
+        if ($byName->count() === 1) {
+            return ['user' => $byName->first(), 'ambiguous_real_name' => false];
+        }
+
+        return ['user' => null, 'ambiguous_real_name' => false];
     }
 
     /**
