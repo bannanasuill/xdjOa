@@ -158,6 +158,67 @@ const DATA_SCOPE_LABELS = {
   dept: '本部门',
 };
 
+/**
+ * 父子联动 el-tree 下还原勾选：接口常同时返回「父菜单 id + 部分子 id」（如合并菜单祖先），
+ * 若直接把父 id 交给 setCheckedKeys，会表现为整棵子树全选。
+ * 规则：非叶节点在 assigned 中且其下无一叶子在 assigned → 视为勾选整棵子树（展开为全部叶子 id）；
+ * 非叶节点在 assigned 且仅有部分叶子在 assigned → 只传这些叶子，父级由组件显示半选；
+ * 非叶节点在 assigned 且全部叶子在 assigned → 传全部叶子即可，父级联动为全选。
+ *
+ * @param {Array<number|string>} assignedIds
+ * @param {Array<object>} nodes
+ * @returns {number[]}
+ */
+function permAssignedKeysForLinkedTree(assignedIds, nodes) {
+  const assigned = new Set(
+    (assignedIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0),
+  );
+  const out = new Set();
+
+  function collectLeafIds(node) {
+    const ch = node.children;
+    if (!Array.isArray(ch) || ch.length === 0) {
+      return [Number(node.id)];
+    }
+    return ch.flatMap(collectLeafIds);
+  }
+
+  function walk(node) {
+    const id = Number(node.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return;
+    }
+    const children = Array.isArray(node.children) ? node.children : [];
+
+    if (children.length === 0) {
+      if (assigned.has(id)) {
+        out.add(id);
+      }
+      return;
+    }
+
+    const leafIds = collectLeafIds(node);
+    const leavesInAssigned = leafIds.filter((lid) => assigned.has(lid));
+    const hasNode = assigned.has(id);
+
+    if (hasNode) {
+      if (leavesInAssigned.length === 0) {
+        leafIds.forEach((lid) => out.add(lid));
+      } else if (leavesInAssigned.length === leafIds.length) {
+        leafIds.forEach((lid) => out.add(lid));
+      } else {
+        leavesInAssigned.forEach((lid) => out.add(lid));
+      }
+      return;
+    }
+
+    children.forEach(walk);
+  }
+
+  (nodes || []).forEach(walk);
+  return [...out];
+}
+
 export default {
   mixins: [adminTableFixedHeader],
   data() {
@@ -311,7 +372,8 @@ export default {
       await this.$nextTick();
       const tree = this.$refs.permTree;
       if (tree && typeof tree.setCheckedKeys === 'function') {
-        tree.setCheckedKeys(keys);
+        const forTree = permAssignedKeysForLinkedTree(keys, this.permTreeData);
+        tree.setCheckedKeys(forTree);
       }
     },
     async submitAssignPermissions() {
