@@ -37,6 +37,36 @@
           />
         </el-select>
         <el-select
+          v-model="query.employment_scope"
+          clearable
+          placeholder="离职范围"
+          size="small"
+          class="admin-w-140"
+          @change="fetchUsers(1)"
+        >
+          <el-option
+            v-for="o in employmentScopeOptions"
+            :key="o.value"
+            :label="o.label"
+            :value="o.value"
+          />
+        </el-select>
+        <el-select
+          v-model="query.status"
+          clearable
+          placeholder="用户状态"
+          size="small"
+          class="admin-w-140"
+          @change="fetchUsers(1)"
+        >
+          <el-option
+            v-for="o in userStatusOptions"
+            :key="'st-' + o.value"
+            :label="o.label"
+            :value="o.value"
+          />
+        </el-select>
+        <el-select
           v-model="query.position_id"
           clearable
           filterable
@@ -524,7 +554,7 @@ export default {
       loading: false,
       rows: [],
       meta: { current_page: 1, per_page: 20, total: 0, last_page: 1 },
-      query: { q: '', role_id: null, presence_today: null, position_id: null, per_page: 20 },
+      query: { q: '', role_id: null, presence_today: null, position_id: null, status: null, employment_scope: null, per_page: 20 },
       roleFilterOptions: [],
       positionFilterOptions: [],
       presenceFilterOptions: [
@@ -533,6 +563,10 @@ export default {
         { value: 'outing', label: '外出' },
         { value: 'off_work', label: '下班' },
         { value: 'unknown', label: '其他' },
+      ],
+      employmentScopeOptions: [
+        { value: 'not_left', label: '未离职' },
+        { value: 'left', label: '已离职' },
       ],
       perPageOptions: [10, 20, 50, 100],
       /** 与 UserModel::employmentStatusOptions 一致，由列表接口 options.status_options 下发 */
@@ -658,11 +692,35 @@ export default {
       }
       this.currentUserIsSuperAdmin = !!(d && d.is_super_admin);
     });
+    this.applyRouteQueryFilters(this.$route.query);
     this.loadRoleFilterOptions();
     this.loadPositionFilterOptions();
     this.fetchUsers(1);
   },
+  watch: {
+    '$route.query': {
+      deep: true,
+      handler(nextQuery) {
+        this.applyRouteQueryFilters(nextQuery);
+        this.fetchUsers(1);
+      },
+    },
+  },
   methods: {
+    applyRouteQueryFilters(routeQuery) {
+      const q = routeQuery || {};
+      this.query.q = typeof q.q === 'string' ? q.q : '';
+      this.query.role_id = q.role_id != null && q.role_id !== '' ? Number(q.role_id) : null;
+      this.query.position_id = q.position_id != null && q.position_id !== '' ? Number(q.position_id) : null;
+      this.query.presence_today = typeof q.presence_today === 'string' && q.presence_today !== '' ? q.presence_today : null;
+      this.query.status = q.status != null && q.status !== '' ? Number(q.status) : null;
+      const scope = typeof q.employment_scope === 'string' && q.employment_scope !== '' ? q.employment_scope : null;
+      this.query.employment_scope = scope === 'left' || scope === 'not_left' ? scope : null;
+      this.query.per_page = q.per_page != null && q.per_page !== '' ? Number(q.per_page) : 20;
+      if (!this.perPageOptions.includes(this.query.per_page)) {
+        this.query.per_page = 20;
+      }
+    },
     canOperateSuperAdmin(row) {
       if (!row || !row.is_super_admin) return true;
       return !!this.currentUserIsSuperAdmin;
@@ -682,18 +740,19 @@ export default {
       return (page - 1) * per + index + 1;
     },
     userRowSelectable(row) {
-      if (!row || !this.canOperateSuperAdmin(row)) return false;
+      if (!row) return false;
       const isSelf = this.currentUserId != null && Number(row.id) === Number(this.currentUserId);
       const canUpdate = this.$canPerm('perm.admin.api.users.update');
       const canDestroy = this.$canPerm('perm.admin.api.users.destroy');
       const canStatus = this.$canPerm('perm.admin.api.users.status');
       if (canUpdate) return true;
+      if (!this.canOperateSuperAdmin(row)) return false;
       if (canDestroy && !isSelf) return true;
       if (canStatus) return true;
       return false;
     },
     selectedAssignableUsers() {
-      return (this.selectedUserRows || []).filter((r) => r && this.canOperateSuperAdmin(r));
+      return (this.selectedUserRows || []).filter((r) => !!r);
     },
     selectedDeletableUsers() {
       if (!this.$canPerm('perm.admin.api.users.destroy')) return [];
@@ -725,6 +784,12 @@ export default {
         }
         if (this.query.position_id != null && this.query.position_id !== '') {
           params.position_id = this.query.position_id;
+        }
+        if (this.query.status != null && this.query.status !== '') {
+          params.status = this.query.status;
+        }
+        if (this.query.employment_scope != null && this.query.employment_scope !== '') {
+          params.employment_scope = this.query.employment_scope;
         }
         const { data } = await window.axios.get('/admin/api/users', { params });
         const statusRaw = (data.options && data.options.status_options) || {};
@@ -764,6 +829,8 @@ export default {
       this.query.role_id = null;
       this.query.presence_today = null;
       this.query.position_id = null;
+      this.query.status = null;
+      this.query.employment_scope = null;
       this.query.per_page = 20;
       this.fetchUsers(1);
     },
@@ -886,7 +953,7 @@ export default {
       this.formVisible = true;
     },
     openRoleAssign(row) {
-      if (!row || !this.canOperateSuperAdmin(row)) {
+      if (!row) {
         return;
       }
       if (!this.$canPerm('perm.admin.api.users.update')) {
@@ -988,7 +1055,7 @@ export default {
       }
     },
     openOrgAssign(row) {
-      if (!row || !this.canOperateSuperAdmin(row)) {
+      if (!row) {
         return;
       }
       if (!this.$canPerm('perm.admin.api.users.update')) {
@@ -1132,7 +1199,7 @@ export default {
       }
     },
     openStoreAssign(row) {
-      if (!row || !this.canOperateSuperAdmin(row)) return;
+      if (!row) return;
       if (!this.$canPerm('perm.admin.api.users.update')) return;
       this.storeAssignBulk = false;
       this.storeAssignTarget = row;

@@ -350,6 +350,8 @@ class UserModel extends Authenticatable
         ?int $roleId = null,
         ?string $presenceFilter = null,
         ?int $positionId = null,
+        ?int $status = null,
+        ?string $employmentScope = null,
     ): Builder {
         $query = static::query();
         $keyword = trim($keyword);
@@ -388,6 +390,16 @@ class UserModel extends Authenticatable
                 });
             } else {
                 $query->whereRaw('1 = 0');
+            }
+        }
+
+        if ($status !== null) {
+            $query->where('status', $status);
+        } elseif (is_string($employmentScope) && $employmentScope !== '') {
+            if ($employmentScope === 'left') {
+                $query->where('status', self::STATUS_LEFT);
+            } elseif ($employmentScope === 'not_left') {
+                $query->where('status', '!=', self::STATUS_LEFT);
             }
         }
 
@@ -1119,8 +1131,10 @@ class UserModel extends Authenticatable
         int $perPage,
         ?string $presenceFilter = null,
         ?int $positionId = null,
+        ?int $status = null,
+        ?string $employmentScope = null,
     ): array {
-        $paginator = static::adminListQuery($keyword, $roleId, $presenceFilter, $positionId)
+        $paginator = static::adminListQuery($keyword, $roleId, $presenceFilter, $positionId, $status, $employmentScope)
             ->orderBy('id')
             ->paginate($perPage);
 

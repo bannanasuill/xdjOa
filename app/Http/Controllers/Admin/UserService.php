@@ -626,11 +626,6 @@ class UserService extends Controller
     /** SPA PATCH 分配角色。 */
     public function apiSyncRoles(Request $request, UserModel $adminUser): JsonResponse
     {
-        $actor = $request->user();
-        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
-            return response()->json(['message' => '仅超级管理员可修改超级管理员角色'], 403);
-        }
-
         $validated = $request->validate([
             'role_ids' => ['present', 'array'],
             'role_ids.*' => ['integer', 'exists:roles,id'],
@@ -649,11 +644,6 @@ class UserService extends Controller
     /** SPA PATCH：全量同步员工所属部门、职务（均支持多选）。 */
     public function apiSyncOrg(Request $request, UserModel $adminUser): JsonResponse
     {
-        $actor = $request->user();
-        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
-            return response()->json(['message' => '仅超级管理员可修改超级管理员组织归属'], 403);
-        }
-
         $deptRules = ['present', 'array'];
         $deptItemRules = [];
         $posRules = ['present', 'array'];
@@ -823,10 +813,6 @@ class UserService extends Controller
     public function apiUserStores(Request $request, UserModel $adminUser): JsonResponse
     {
         $actor = $request->user();
-        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
-            return response()->json(['message' => '仅超级管理员可查看超级管理员门店分配'], 403);
-        }
-
         if ($actor === null) {
             return response()->json(['message' => '未登录'], 401);
         }
@@ -851,9 +837,6 @@ class UserService extends Controller
     public function apiUserStoresSync(Request $request, UserModel $adminUser): JsonResponse
     {
         $actor = $request->user();
-        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
-            return response()->json(['message' => '仅超级管理员可分配超级管理员门店'], 403);
-        }
         if ($actor === null) {
             return response()->json(['message' => '未登录'], 401);
         }
@@ -1085,6 +1068,8 @@ class UserService extends Controller
             'role_id' => ['nullable', 'integer', 'min:1'],
             'position_id' => ['nullable', 'integer', 'min:1'],
             'presence_today' => ['nullable', 'string', Rule::in(array_keys(UserModel::adminListPresenceFilterOptions()))],
+            'status' => ['nullable', 'integer', Rule::in(array_keys(UserModel::employmentStatusOptions()))],
+            'employment_scope' => ['nullable', 'string', Rule::in(['left', 'not_left'])],
         ];
         if (RoleModel::isTablePresent()) {
             $rules['role_id'][] = Rule::exists('roles', 'id');
@@ -1246,11 +1231,15 @@ class UserService extends Controller
         $perPage = (int) ($validated['per_page'] ?? 20);
         $roleId = isset($validated['role_id']) ? (int) $validated['role_id'] : null;
         $positionId = isset($validated['position_id']) ? (int) $validated['position_id'] : null;
+        $status = isset($validated['status']) ? (int) $validated['status'] : null;
+        $employmentScope = isset($validated['employment_scope']) && is_string($validated['employment_scope'])
+            ? trim($validated['employment_scope'])
+            : null;
         $presenceToday = isset($validated['presence_today']) && is_string($validated['presence_today']) && $validated['presence_today'] !== ''
             ? $validated['presence_today']
             : null;
 
-        $users = UserModel::adminListQuery($keyword, $roleId, $presenceToday, $positionId)
+        $users = UserModel::adminListQuery($keyword, $roleId, $presenceToday, $positionId, $status, $employmentScope)
             ->orderBy('id')
             ->paginate($perPage)
             ->withQueryString();
@@ -1279,6 +1268,10 @@ class UserService extends Controller
         $perPage = (int) ($validated['per_page'] ?? 20);
         $roleId = isset($validated['role_id']) ? (int) $validated['role_id'] : null;
         $positionId = isset($validated['position_id']) ? (int) $validated['position_id'] : null;
+        $status = isset($validated['status']) ? (int) $validated['status'] : null;
+        $employmentScope = isset($validated['employment_scope']) && is_string($validated['employment_scope'])
+            ? trim($validated['employment_scope'])
+            : null;
         $presenceToday = isset($validated['presence_today']) && is_string($validated['presence_today']) && $validated['presence_today'] !== ''
             ? $validated['presence_today']
             : null;
@@ -1289,6 +1282,8 @@ class UserService extends Controller
             $perPage,
             $presenceToday,
             $positionId > 0 ? $positionId : null,
+            $status,
+            $employmentScope,
         );
     }
 

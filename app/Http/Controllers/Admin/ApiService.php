@@ -70,7 +70,14 @@ class ApiService extends Controller
             return response()->json(['message' => '无权查看'], 403);
         }
         if (! Schema::hasTable('users')) {
-            return response()->json(['data' => ['total' => 0, 'by_status' => []]]);
+            return response()->json([
+                'data' => [
+                    'total' => 0,
+                    'by_status' => [],
+                    'employment' => ['left' => 0, 'not_left' => 0],
+                    'presence_now' => ['present' => 0, 'outing' => 0, 'not_arrived' => 0],
+                ],
+            ]);
         }
 
         $rows = DB::table('users')
@@ -107,10 +114,41 @@ class ApiService extends Controller
             ];
         }
 
+        $total = (int) DB::table('users')->count();
+        $leftCount = $countByStatus[UserModel::STATUS_LEFT] ?? 0;
+        $notLeftCount = max(0, $total - $leftCount);
+
+        $presenceNow = ['present' => 0, 'outing' => 0, 'not_arrived' => 0];
+        $notLeftUserIds = DB::table('users')
+            ->where('status', '!=', UserModel::STATUS_LEFT)
+            ->pluck('id')
+            ->map(static fn ($id) => (int) $id)
+            ->filter(static fn (int $id) => $id > 0)
+            ->values()
+            ->all();
+        if ($notLeftUserIds !== []) {
+            $meta = UserModel::presenceTodayMetaMapForUserIds($notLeftUserIds);
+            foreach ($meta as $row) {
+                $label = trim((string) ($row['label'] ?? ''));
+                if ($label === '到岗') {
+                    $presenceNow['present']++;
+                } elseif ($label === '外出') {
+                    $presenceNow['outing']++;
+                } else {
+                    $presenceNow['not_arrived']++;
+                }
+            }
+        }
+
         return response()->json([
             'data' => [
-                'total' => (int) DB::table('users')->count(),
+                'total' => $total,
                 'by_status' => $byStatus,
+                'employment' => [
+                    'left' => (int) $leftCount,
+                    'not_left' => (int) $notLeftCount,
+                ],
+                'presence_now' => $presenceNow,
             ],
         ]);
     }
