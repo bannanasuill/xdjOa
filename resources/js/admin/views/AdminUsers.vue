@@ -140,7 +140,7 @@
               class="admin-mr-6"
               @click="openPresenceViewer(row)"
             >查看出勤</el-button>
-            <template v-if="!row.is_super_admin && $canPerm('perm.admin.api.users.update')">
+            <template v-if="canEditUser(row)">
               <el-button size="mini" @click="openEdit(row)">编辑</el-button>
             </template>
             <span
@@ -269,19 +269,6 @@
           </el-form-item>
           <el-form-item label="手机号">
             <el-input v-model="form.phone" autocomplete="off" />
-          </el-form-item>
-          <el-form-item v-if="formRoleFieldVisible" label="角色" class="admin-users-role-form-item">
-            <el-select
-              v-model="form.role_ids"
-              multiple
-              filterable
-              clearable
-              placeholder="可多选，保存时写入"
-              popper-class="admin-users-role-select-dropdown"
-              class="admin-w-full admin-users-role-select"
-            >
-              <el-option v-for="r in roleOptions" :key="r.id" :label="roleOptionLabel(r)" :value="r.id" />
-            </el-select>
           </el-form-item>
         </template>
       </el-form>
@@ -504,7 +491,7 @@
       @closed="onBulkStatusDialogClosed"
     >
       <p class="admin-text-muted" style="margin: 0 0 12px;">
-        将把所选 <strong>{{ bulkStatusSelectedCount }}</strong> 个用户的状态统一修改为下方选项（不含超级管理员）。
+        将把所选 <strong>{{ bulkStatusSelectedCount }}</strong> 个用户的状态统一修改为下方选项。
       </p>
       <el-form label-width="88px" size="small">
         <el-form-item label="目标状态" required>
@@ -533,6 +520,7 @@ export default {
   data() {
     return {
       currentUserId: null,
+      currentUserIsSuperAdmin: false,
       loading: false,
       rows: [],
       meta: { current_page: 1, per_page: 20, total: 0, last_page: 1 },
@@ -615,12 +603,6 @@ export default {
     };
   },
   computed: {
-    formRoleFieldVisible() {
-      if (this.formMode === 'create') {
-        return this.$canPerm('perm.admin.api.users.store');
-      }
-      return this.$canPerm('perm.admin.api.users.update');
-    },
     presenceDialogTitle() {
       const t = this.presenceTarget;
       if (!t) return '出勤记录';
@@ -630,7 +612,7 @@ export default {
     },
     bulkAssignableSelectedCount() {
       if (!this.$canPerm('perm.admin.api.users.update')) return 0;
-      return (this.selectedUserRows || []).filter((r) => r && !r.is_super_admin).length;
+      return (this.selectedUserRows || []).filter((r) => r && this.canOperateSuperAdmin(r)).length;
     },
     bulkDeletableSelectedCount() {
       if (!this.$canPerm('perm.admin.api.users.destroy')) return 0;
@@ -639,10 +621,10 @@ export default {
         (r) => r && !r.is_super_admin && (selfId == null || Number(selfId) !== Number(r.id))
       ).length;
     },
-    /** 可批量改状态：已勾选且非超级管理员 */
+    /** 可批量改状态：已勾选且当前操作者有权操作 */
     bulkStatusSelectedCount() {
       if (!this.$canPerm('perm.admin.api.users.status')) return 0;
-      return (this.selectedUserRows || []).filter((r) => r && !r.is_super_admin).length;
+      return (this.selectedUserRows || []).filter((r) => r && this.canOperateSuperAdmin(r)).length;
     },
     orgAssignTitle() {
       if (this.orgAssignBulk) {
@@ -674,12 +656,20 @@ export default {
       if (d && d.id != null) {
         this.currentUserId = Number(d.id);
       }
+      this.currentUserIsSuperAdmin = !!(d && d.is_super_admin);
     });
     this.loadRoleFilterOptions();
     this.loadPositionFilterOptions();
     this.fetchUsers(1);
   },
   methods: {
+    canOperateSuperAdmin(row) {
+      if (!row || !row.is_super_admin) return true;
+      return !!this.currentUserIsSuperAdmin;
+    },
+    canEditUser(row) {
+      return !!row && this.$canPerm('perm.admin.api.users.update') && this.canOperateSuperAdmin(row);
+    },
     positionOptionLabel(p) {
       const name = (p && p.name && String(p.name).trim()) || '';
       const dn = p && p.dept_name && String(p.dept_name).trim() ? String(p.dept_name).trim() : '';
@@ -692,7 +682,7 @@ export default {
       return (page - 1) * per + index + 1;
     },
     userRowSelectable(row) {
-      if (!row || row.is_super_admin) return false;
+      if (!row || !this.canOperateSuperAdmin(row)) return false;
       const isSelf = this.currentUserId != null && Number(row.id) === Number(this.currentUserId);
       const canUpdate = this.$canPerm('perm.admin.api.users.update');
       const canDestroy = this.$canPerm('perm.admin.api.users.destroy');
@@ -703,13 +693,13 @@ export default {
       return false;
     },
     selectedAssignableUsers() {
-      return (this.selectedUserRows || []).filter((r) => r && !r.is_super_admin);
+      return (this.selectedUserRows || []).filter((r) => r && this.canOperateSuperAdmin(r));
     },
     selectedDeletableUsers() {
       if (!this.$canPerm('perm.admin.api.users.destroy')) return [];
       const selfId = this.currentUserId;
       return (this.selectedUserRows || []).filter(
-        (r) => r && !r.is_super_admin && (selfId == null || Number(r.id) !== Number(selfId))
+        (r) => r && this.canOperateSuperAdmin(r) && (selfId == null || Number(r.id) !== Number(selfId))
       );
     },
     handleUserSelectionChange(selection) {
@@ -881,8 +871,8 @@ export default {
       this.loadInviteOptions();
     },
     openEdit(row) {
-      if (row.is_super_admin) {
-        this.$message.warning('超级管理员不可编辑');
+      if (!this.canOperateSuperAdmin(row)) {
+        this.$message.warning('仅超级管理员可编辑超级管理员账号');
         return;
       }
       this.formMode = 'edit';
@@ -892,13 +882,11 @@ export default {
         real_name: row.real_name || '',
         phone: row.phone || '',
         password: '',
-        role_ids: (row.roles || []).map((r) => r.id).filter((id) => id != null && Number(id) > 0),
       };
       this.formVisible = true;
-      this.loadRoleOptions();
     },
     openRoleAssign(row) {
-      if (!row || row.is_super_admin) {
+      if (!row || !this.canOperateSuperAdmin(row)) {
         return;
       }
       if (!this.$canPerm('perm.admin.api.users.update')) {
@@ -914,7 +902,7 @@ export default {
       if (!this.$canPerm('perm.admin.api.users.update')) return;
       const rows = this.selectedAssignableUsers();
       if (!rows.length) {
-        this.$message.warning('请先勾选需要分配角色的用户（不含超级管理员）');
+        this.$message.warning('请先勾选需要分配角色的用户');
         return;
       }
       this.roleAssignBulk = true;
@@ -1000,7 +988,7 @@ export default {
       }
     },
     openOrgAssign(row) {
-      if (!row || row.is_super_admin) {
+      if (!row || !this.canOperateSuperAdmin(row)) {
         return;
       }
       if (!this.$canPerm('perm.admin.api.users.update')) {
@@ -1016,7 +1004,7 @@ export default {
       if (!this.$canPerm('perm.admin.api.users.update')) return;
       const rows = this.selectedAssignableUsers();
       if (!rows.length) {
-        this.$message.warning('请先勾选需要分配职务的用户（不含超级管理员）');
+        this.$message.warning('请先勾选需要分配职务的用户');
         return;
       }
       this.orgAssignBulk = true;
@@ -1144,7 +1132,7 @@ export default {
       }
     },
     openStoreAssign(row) {
-      if (!row || row.is_super_admin) return;
+      if (!row || !this.canOperateSuperAdmin(row)) return;
       if (!this.$canPerm('perm.admin.api.users.update')) return;
       this.storeAssignBulk = false;
       this.storeAssignTarget = row;
@@ -1157,7 +1145,7 @@ export default {
       if (!this.$canPerm('perm.admin.api.users.update')) return;
       const rows = this.selectedAssignableUsers();
       if (!rows.length) {
-        this.$message.warning('请先勾选需要分配店铺的用户（不含超级管理员）');
+        this.$message.warning('请先勾选需要分配店铺的用户');
         return;
       }
       this.storeAssignBulk = true;
@@ -1335,9 +1323,6 @@ export default {
             account: accTrim,
             password: this.form.password,
           };
-          if (this.formRoleFieldVisible) {
-            payload.role_ids = Array.isArray(this.form.role_ids) ? this.form.role_ids : [];
-          }
           await window.axios.put(`/admin/api/users/${this.editingId}`, payload);
           this.$message.success('用户信息已更新');
         }
@@ -1385,7 +1370,7 @@ export default {
       if (!this.$canPerm('perm.admin.api.users.destroy')) return;
       const rows = this.selectedDeletableUsers();
       if (!rows.length) {
-        this.$message.warning('请先勾选可删除的用户（不含超级管理员与当前登录账号）');
+        this.$message.warning('请先勾选可删除的用户（不含当前登录账号）');
         return;
       }
       try {
@@ -1434,7 +1419,7 @@ export default {
     openBulkStatusDialog() {
       if (!this.$canPerm('perm.admin.api.users.status')) return;
       if (this.bulkStatusSelectedCount === 0) {
-        this.$message.warning('请先勾选用户（不含超级管理员）');
+        this.$message.warning('请先勾选用户');
         return;
       }
       this.bulkStatusTarget = 1;
@@ -1448,7 +1433,7 @@ export default {
       if (!this.$canPerm('perm.admin.api.users.status')) return;
       const rows = this.selectedAssignableUsers();
       if (!rows.length) {
-        this.$message.warning('请先勾选用户（不含超级管理员）');
+        this.$message.warning('请先勾选用户');
         return;
       }
       const remark = (this.bulkStatusRemark || '').trim();

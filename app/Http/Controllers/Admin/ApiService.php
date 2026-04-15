@@ -49,6 +49,7 @@ class ApiService extends Controller
             'account' => $user->account,
             'real_name' => $user->real_name,
             'status' => $user->status,
+            'is_super_admin' => $user instanceof UserModel ? $user->isSuperAdminAccount() : false,
             'roles' => $user->getAdminRolesForDisplay(),
             'permissions' => $user->getAdminPermissionCodes(),
         ];

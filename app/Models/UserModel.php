@@ -601,10 +601,6 @@ class UserModel extends Authenticatable
             return;
         }
 
-        if ($this->isSuperAdminAccount()) {
-            return;
-        }
-
         $roleIds = array_values(array_unique(array_filter(array_map('intval', $roleIds))));
 
         if ($roleIds !== []) {
@@ -1078,10 +1074,6 @@ class UserModel extends Authenticatable
      */
     public function syncOrgFromIds(array $deptIds, array $positionIds): void
     {
-        if ($this->isSuperAdminAccount()) {
-            return;
-        }
-
         $deptIds = array_values(array_unique(array_filter(array_map('intval', $deptIds), static fn (int $id) => $id > 0)));
         $positionIds = array_values(array_unique(array_filter(array_map('intval', $positionIds), static fn (int $id) => $id > 0)));
 

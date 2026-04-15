@@ -28,6 +28,11 @@ use Throwable;
  */
 class UserService extends Controller
 {
+    private function canManageSuperAdmin(?UserModel $actor): bool
+    {
+        return $actor instanceof UserModel && $actor->isSuperAdminAccount();
+    }
+
     /**
      * 分配角色下拉：组装权鉴后交给模型取数。
      */
@@ -565,7 +570,8 @@ class UserService extends Controller
     /** Blade 编辑页；超级管理员不可进。 */
     public function edit(UserModel $adminUser): View
     {
-        if ($adminUser->isSuperAdminAccount()) {
+        $actor = auth()->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
             abort(403, '超级管理员不可编辑。');
         }
 
@@ -577,7 +583,8 @@ class UserService extends Controller
     /** Blade PUT 更新基础资料（不含角色）。 */
     public function update(Request $request, UserModel $adminUser): RedirectResponse
     {
-        if ($adminUser->isSuperAdminAccount()) {
+        $actor = $request->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
             abort(403, '超级管理员不可编辑。');
         }
 
@@ -594,8 +601,9 @@ class UserService extends Controller
     /** SPA PUT 更新基础资料。 */
     public function apiUpdate(Request $request, UserModel $adminUser): JsonResponse
     {
-        if ($adminUser->isSuperAdminAccount()) {
-            abort(403, '超级管理员不可编辑。');
+        $actor = $request->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
+            abort(403, '仅超级管理员可编辑超级管理员账号。');
         }
 
         $rules = self::updateUserValidationRules($adminUser)['rules'];
@@ -618,8 +626,9 @@ class UserService extends Controller
     /** SPA PATCH 分配角色。 */
     public function apiSyncRoles(Request $request, UserModel $adminUser): JsonResponse
     {
-        if ($adminUser->isSuperAdminAccount()) {
-            return response()->json(['message' => '超级管理员不可修改角色'], 403);
+        $actor = $request->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
+            return response()->json(['message' => '仅超级管理员可修改超级管理员角色'], 403);
         }
 
         $validated = $request->validate([
@@ -640,8 +649,9 @@ class UserService extends Controller
     /** SPA PATCH：全量同步员工所属部门、职务（均支持多选）。 */
     public function apiSyncOrg(Request $request, UserModel $adminUser): JsonResponse
     {
-        if ($adminUser->isSuperAdminAccount()) {
-            return response()->json(['message' => '超级管理员不可修改组织归属'], 403);
+        $actor = $request->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
+            return response()->json(['message' => '仅超级管理员可修改超级管理员组织归属'], 403);
         }
 
         $deptRules = ['present', 'array'];
@@ -812,11 +822,11 @@ class UserService extends Controller
     /** 某用户当前门店任职列表（编辑分配用）。 */
     public function apiUserStores(Request $request, UserModel $adminUser): JsonResponse
     {
-        if ($adminUser->isSuperAdminAccount()) {
-            return response()->json(['message' => '超级管理员无需分配门店'], 403);
+        $actor = $request->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
+            return response()->json(['message' => '仅超级管理员可查看超级管理员门店分配'], 403);
         }
 
-        $actor = $request->user();
         if ($actor === null) {
             return response()->json(['message' => '未登录'], 401);
         }
@@ -840,11 +850,10 @@ class UserService extends Controller
      */
     public function apiUserStoresSync(Request $request, UserModel $adminUser): JsonResponse
     {
-        if ($adminUser->isSuperAdminAccount()) {
-            return response()->json(['message' => '超级管理员不可分配门店'], 403);
-        }
-
         $actor = $request->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
+            return response()->json(['message' => '仅超级管理员可分配超级管理员门店'], 403);
+        }
         if ($actor === null) {
             return response()->json(['message' => '未登录'], 401);
         }
@@ -962,7 +971,8 @@ class UserService extends Controller
     /** Blade 切换启用/禁用，须备注；超级管理员不可改。 */
     public function updateStatus(Request $request, UserModel $adminUser): RedirectResponse
     {
-        if ($adminUser->isSuperAdminAccount()) {
+        $actor = $request->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
             abort(403, '超级管理员不可更新状态。');
         }
 
@@ -982,8 +992,9 @@ class UserService extends Controller
     /** SPA PATCH 状态 + 备注。 */
     public function apiUpdateStatus(Request $request, UserModel $adminUser): JsonResponse
     {
-        if ($adminUser->isSuperAdminAccount()) {
-            abort(403, '超级管理员不可更新状态。');
+        $actor = $request->user();
+        if ($adminUser->isSuperAdminAccount() && ! $this->canManageSuperAdmin($actor instanceof UserModel ? $actor : null)) {
+            abort(403, '仅超级管理员可更新超级管理员状态。');
         }
 
         $v = self::statusValidation();
