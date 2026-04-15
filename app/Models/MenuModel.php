@@ -39,6 +39,7 @@ class MenuModel extends Model
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id', 'id')
+            ->orderByDesc('visible')
             ->orderBy('sort')
             ->orderBy('id');
     }

@@ -651,6 +651,12 @@ html[data-admin-theme='dark'] .admin-role-system-hint {
   display: contents;
 }
 
+/* 菜单管理中设为「隐藏」的项：仍可对具备对应权限的用户显示，略弱化以区分 */
+.admin-menu .admin-menu-node--hidden > .el-submenu__title,
+.admin-menu .admin-menu-node--hidden.el-menu-item {
+  opacity: 0.72;
+}
+
 /* 有子级的父菜单标题：点击时跳转 path（与 el-submenu 展开并存） */
 .admin-submenu-title {
   display: inline-flex;
@@ -941,6 +947,68 @@ html[data-admin-theme='dark'] .admin-departments-page .admin-dept-table--positio
 }
 .admin-home__loading {
   color: #909399;
+}
+.admin-mt-12 {
+  margin-top: 12px;
+}
+.admin-home__stat-total {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: #606266;
+}
+.admin-shell.admin-theme-dark .admin-home__stat-total {
+  color: rgba(255, 255, 255, 0.65);
+}
+.admin-home__stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.admin-home__stat-item {
+  flex: 1 1 120px;
+  min-width: 100px;
+  max-width: 160px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid #ebeef5;
+  background: #fafafa;
+  text-align: center;
+}
+.admin-shell.admin-theme-dark .admin-home__stat-item {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+.admin-home__stat-item--on {
+  border-color: rgba(19, 206, 102, 0.35);
+  background: rgba(19, 206, 102, 0.08);
+}
+.admin-home__stat-item--off {
+  border-color: rgba(144, 147, 153, 0.35);
+}
+.admin-home__stat-item--mid {
+  border-color: rgba(230, 162, 60, 0.35);
+  background: rgba(230, 162, 60, 0.06);
+}
+.admin-home__stat-item--other {
+  border-color: rgba(245, 108, 108, 0.25);
+  background: rgba(245, 108, 108, 0.06);
+}
+.admin-home__stat-count {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #303133;
+}
+.admin-shell.admin-theme-dark .admin-home__stat-count {
+  color: rgba(255, 255, 255, 0.92);
+}
+.admin-home__stat-label {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #606266;
+}
+.admin-shell.admin-theme-dark .admin-home__stat-label {
+  color: rgba(255, 255, 255, 0.65);
 }
 
 /* Dark theme: content components */

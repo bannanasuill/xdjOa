@@ -50,6 +50,9 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
         Route::get('/me', [ApiService::class, 'me'])->name('admin.api.me');
         Route::post('/logout', [ApiService::class, 'logout'])->name('admin.api.logout');
         Route::get('/menus', [ApiService::class, 'menus'])->name('admin.api.menus');
+        Route::get('/dashboard/user-status-summary', [ApiService::class, 'userStatusSummary'])
+            ->middleware('admin.perm:perm.admin.api.users.index')
+            ->name('admin.api.dashboard.user-status-summary');
 
         Route::get('/role-options', [UserService::class, 'apiRoleOptions'])->name('admin.api.role-options');
         Route::get('/users/org-options', [UserService::class, 'apiOrgOptions'])
@@ -58,6 +61,9 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
         Route::get('/users/store-assignment-options', [UserService::class, 'apiStoreAssignmentOptions'])
             ->middleware('admin.perm:perm.admin.api.users.update')
             ->name('admin.api.users.store-assignment-options');
+        Route::get('/users/invite-options', [UserService::class, 'apiInviteOptions'])
+            ->middleware('admin.perm:perm.admin.api.users.store')
+            ->name('admin.api.users.invite-options');
 
         Route::get('/users/position-filter-options', [UserService::class, 'apiPositionFilterOptions'])
             ->middleware('admin.perm:perm.admin.api.users.index')
@@ -65,6 +71,15 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
         Route::get('/users', [UserService::class, 'apiIndex'])
             ->middleware('admin.perm:perm.admin.api.users.index')
             ->name('admin.api.users.index');
+        Route::get('/users/invites', [UserService::class, 'apiInviteIndex'])
+            ->middleware('admin.perm:perm.admin.api.users.invites.index')
+            ->name('admin.api.users.invites.index');
+        Route::get('/users/invites/{inviteId}', [UserService::class, 'apiInviteShow'])
+            ->middleware('admin.perm:perm.admin.api.users.invites.index')
+            ->name('admin.api.users.invites.show');
+        Route::patch('/users/invites/{inviteId}/status', [UserService::class, 'apiInviteUpdateStatus'])
+            ->middleware('admin.perm:perm.admin.api.users.store')
+            ->name('admin.api.users.invites.status');
         Route::get('/users/{adminUser}/presence-records', [UserService::class, 'apiUserPresenceRecords'])
             ->middleware('admin.perm:perm.admin.api.users.index')
             ->name('admin.api.users.presence-records');
@@ -89,6 +104,9 @@ Route::middleware(['auth', 'admin.panel'])->group(function () {
         Route::patch('/users/{adminUser}/status', [UserService::class, 'apiUpdateStatus'])
             ->middleware('admin.perm:perm.admin.api.users.status')
             ->name('admin.api.users.status');
+        Route::delete('/users/{adminUser}', [UserService::class, 'apiDestroy'])
+            ->middleware('admin.perm:perm.admin.api.users.destroy')
+            ->name('admin.api.users.destroy');
 
         Route::get('/user-logs', [UserLogService::class, 'apiIndex'])
             ->middleware('admin.perm:perm.admin.api.logs.index')

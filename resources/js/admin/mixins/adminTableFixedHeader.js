@@ -29,7 +29,8 @@ export default {
           return;
         }
         const top = el.getBoundingClientRect().top;
-        const dockReserve = 56;
+        /* 与 admin-spa.css 中 .admin-main-dock（min-height + 上下 padding + 边框）大致对齐 */
+        const dockReserve = 80;
         const bottomGap = 12;
         const h = window.innerHeight - top - dockReserve - bottomGap;
         this.adminTableMaxHeight = Math.max(200, Math.floor(h));

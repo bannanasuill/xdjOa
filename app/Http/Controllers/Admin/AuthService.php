@@ -120,11 +120,7 @@ class AuthService extends Controller
             return $locked;
         }
 
-        if (
-            ! $user
-            || (int) $user->status !== 1
-            || ! Hash::check($credentials['password'], $user->password)
-        ) {
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             $this->hitAdminLoginRateLimitOnFailure($request, $loginInput, $user);
 
             UserLogModel::insertAuthAudit(
@@ -132,14 +128,34 @@ class AuthService extends Controller
                 null,
                 'login',
                 0,
-                '登录失败：账号或密码错误，或账号已禁用。',
+                '登录失败：账号或密码错误。',
                 ['account' => $loginInput, 'resolved_account' => $user?->account],
                 $loginInput,
                 $user?->real_name ?: null,
             );
 
             return back()
-                ->withErrors(['account' => '账号或密码错误，或账号已禁用。'])
+                ->withErrors(['account' => '账号或密码错误。'])
+                ->withInput($request->only('account'));
+        }
+
+        if ((int) $user->status !== UserModel::STATUS_ON_JOB) {
+            $this->hitAdminLoginRateLimitOnFailure($request, $loginInput, $user);
+            $label = UserModel::employmentStatusLabel((int) $user->status);
+
+            UserLogModel::insertAuthAudit(
+                $request,
+                $user,
+                'login',
+                0,
+                '登录失败：账号状态为「'.$label.'」，不可登录。',
+                ['account' => $loginInput, 'resolved_account' => $user->account],
+                $loginInput,
+                $user->real_name ?: null,
+            );
+
+            return back()
+                ->withErrors(['account' => '账号当前状态为「'.$label.'」，暂不可登录'])
                 ->withInput($request->only('account'));
         }
 

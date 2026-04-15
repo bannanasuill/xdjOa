@@ -7,6 +7,7 @@ use App\Models\PermissionModel;
 use App\Models\RoleModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class RoleService extends Controller
@@ -38,7 +39,114 @@ class RoleService extends Controller
             'is_system' => (int) $r->is_system,
             'created_at' => $r->created_at,
             'updated_at' => $r->updated_at,
+            'permissions_text' => $this->rolePermissionsText($r),
         ];
+    }
+
+    /** 列表展示：按层级聚合权限名称（菜单 -> 子权限）。 */
+    private function rolePermissionsText(RoleModel $r): string
+    {
+        if ($r->grantsAllPermissions()) {
+            return '全部权限（系统内置）';
+        }
+
+        if (! RoleModel::isRolePermissionPivotPresent() || ! Schema::hasTable((new PermissionModel)->getTable())) {
+            return '—';
+        }
+
+        $stored = $r->getStoredPermissionIds();
+        if ($stored === []) {
+            return '（未分配权限）';
+        }
+
+        $ids = PermissionModel::mergeAncestorMenuPermissionIds($stored);
+        if ($ids === []) {
+            return '（未分配权限）';
+        }
+
+        $rows = PermissionModel::query()
+            ->whereIn('id', $ids)
+            ->orderBy('id')
+            ->get(['id', 'parent_id', 'name'])
+            ->all();
+
+        if ($rows === []) {
+            return '—';
+        }
+
+        $byId = [];
+        $children = [];
+        foreach ($rows as $row) {
+            $id = (int) $row->id;
+            $pid = $row->parent_id !== null ? (int) $row->parent_id : 0;
+            $name = trim((string) ($row->name ?? ''));
+            if ($id <= 0 || $name === '') {
+                continue;
+            }
+            $byId[$id] = $name;
+            if (! isset($children[$pid])) {
+                $children[$pid] = [];
+            }
+            $children[$pid][] = $id;
+        }
+
+        if ($byId === []) {
+            return '—';
+        }
+
+        $roots = [];
+        foreach (array_keys($byId) as $id) {
+            $parentId = 0;
+            foreach ($children as $pid => $kids) {
+                if (in_array($id, $kids, true)) {
+                    $parentId = (int) $pid;
+                    break;
+                }
+            }
+            if ($parentId <= 0 || ! isset($byId[$parentId])) {
+                $roots[] = $id;
+            }
+        }
+        sort($roots);
+
+        $rendered = [];
+        foreach ($roots as $rootId) {
+            $rendered[] = $this->renderPermissionNodeText($rootId, $byId, $children, []);
+        }
+        $rendered = array_values(array_filter(array_map('strval', $rendered), static fn (string $s) => trim($s) !== ''));
+
+        return $rendered === [] ? '—' : implode('；', $rendered);
+    }
+
+    /**
+     * @param  array<int, string>  $byId
+     * @param  array<int, list<int>>  $children
+     * @param  list<int>  $path
+     */
+    private function renderPermissionNodeText(int $id, array $byId, array $children, array $path): string
+    {
+        if (! isset($byId[$id]) || in_array($id, $path, true)) {
+            return '';
+        }
+
+        $path[] = $id;
+        $name = $byId[$id];
+        $childIds = $children[$id] ?? [];
+        sort($childIds);
+
+        $childTexts = [];
+        foreach ($childIds as $cid) {
+            $text = $this->renderPermissionNodeText((int) $cid, $byId, $children, $path);
+            if ($text !== '') {
+                $childTexts[] = $text;
+            }
+        }
+
+        if ($childTexts === []) {
+            return $name;
+        }
+
+        return $name.'（'.implode('，', $childTexts).'）';
     }
 
     public function apiStore(Request $request): JsonResponse

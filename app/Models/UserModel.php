@@ -29,6 +29,21 @@ class UserModel extends Authenticatable
     /** 具备此权限才允许登录并访问后台（超级管理员不受限） */
     public const ADMIN_PANEL_LOGIN_PERMISSION = 'perm.admin.login';
 
+    /** 后台 API：物理删除用户（须单独授权） */
+    public const API_PERMISSION_DESTROY = 'perm.admin.api.users.destroy';
+
+    /** 用户状态：离职 */
+    public const STATUS_LEFT = 0;
+
+    /** 用户状态：在职 */
+    public const STATUS_ON_JOB = 1;
+
+    /** 用户状态：试岗 */
+    public const STATUS_TRIAL = 2;
+
+    /** 用户状态：试用 */
+    public const STATUS_PROBATION = 3;
+
     /** 用户列表「当下状态」筛选值（与 presence_today 展示文案对应）。 */
     public const PRESENCE_FILTER_NOT_ARRIVED = 'not_arrived';
 
@@ -52,6 +67,28 @@ class UserModel extends Authenticatable
             self::PRESENCE_FILTER_OFF_WORK => '下班',
             self::PRESENCE_FILTER_UNKNOWN => '其他',
         ];
+    }
+
+    /**
+     * 用户状态选项（统一入口，前后端均可复用）。
+     *
+     * @return array<int, string>
+     */
+    public static function employmentStatusOptions(): array
+    {
+        return [
+            self::STATUS_LEFT => '离职',
+            self::STATUS_ON_JOB => '在职',
+            self::STATUS_TRIAL => '试岗',
+            self::STATUS_PROBATION => '试用',
+        ];
+    }
+
+    public static function employmentStatusLabel(int $status): string
+    {
+        $options = self::employmentStatusOptions();
+
+        return $options[$status] ?? '未知';
     }
 
     public $timestamps = false;
@@ -865,6 +902,81 @@ class UserModel extends Authenticatable
     }
 
     /**
+     * 小程序「当前用户」展示：部门、职务、门店名称。
+     * 优先与 {@see self::apiClockInPlacesForUserId} 当日第一条（主门店优先）一致；无当日门店任职时回退未过期的 `user_stores`，再回退 `user_departments` / `user_positions`。
+     *
+     * @return array{department: string, position: string, store: string}
+     */
+    public static function apiEmploymentDisplayForUserId(int $userId, ?string $workDate = null): array
+    {
+        $empty = ['department' => '', 'position' => '', 'store' => ''];
+        if ($userId < 1) {
+            return $empty;
+        }
+
+        $workDate = $workDate !== null && $workDate !== '' ? substr($workDate, 0, 10) : date('Y-m-d');
+
+        $places = static::apiClockInPlacesForUserId($userId, $workDate);
+        if ($places !== []) {
+            $p = $places[0];
+
+            return [
+                'department' => trim((string) ($p['dept_name'] ?? '')),
+                'position' => trim((string) ($p['position_name'] ?? '')),
+                'store' => trim((string) ($p['store_name'] ?? '')),
+            ];
+        }
+
+        $stores = [];
+        if (Schema::hasTable('user_stores')) {
+            $storesMap = static::userStoresMapForUserIds([$userId]);
+            $stores = $storesMap[$userId] ?? [];
+        }
+
+        $active = [];
+        foreach ($stores as $s) {
+            $sd = (string) ($s['start_date'] ?? '');
+            $ed = (string) ($s['end_date'] ?? '');
+            if ($sd !== '' && $ed !== '' && $sd <= $workDate && $ed >= $workDate) {
+                $active[] = $s;
+            }
+        }
+
+        $pick = $active[0] ?? ($stores[0] ?? null);
+        if ($pick !== null) {
+            $dept = trim((string) ($pick['dept_name'] ?? ''));
+            if ($dept === '') {
+                $org = static::orgMapForUserIds([$userId])[$userId] ?? ['departments' => [], 'positions' => []];
+                $deps = $org['departments'] ?? [];
+                $poses = $org['positions'] ?? [];
+                $fromDep = isset($deps[0]['name']) ? trim((string) $deps[0]['name']) : '';
+                $fromPos = isset($poses[0]['dept_name']) ? trim((string) $poses[0]['dept_name']) : '';
+                $dept = $fromDep !== '' ? $fromDep : $fromPos;
+            }
+
+            return [
+                'department' => $dept,
+                'position' => trim((string) ($pick['position_name'] ?? '')),
+                'store' => trim((string) ($pick['store_name'] ?? '')),
+            ];
+        }
+
+        $org = static::orgMapForUserIds([$userId])[$userId] ?? ['departments' => [], 'positions' => []];
+        $deps = $org['departments'] ?? [];
+        $poses = $org['positions'] ?? [];
+        $fromDep = isset($deps[0]['name']) ? trim((string) $deps[0]['name']) : '';
+        $fromPosDept = isset($poses[0]['dept_name']) ? trim((string) $poses[0]['dept_name']) : '';
+        $department = $fromDep !== '' ? $fromDep : $fromPosDept;
+        $position = isset($poses[0]['name']) ? trim((string) $poses[0]['name']) : '';
+
+        return [
+            'department' => $department,
+            'position' => $position,
+            'store' => '',
+        ];
+    }
+
+    /**
      * 小程序可打卡地点：当日有效的门店任职 + 门店坐标/半径（与 POST /api/presence/arrival 中 store_id 对应）。
      *
      * @return list<array{
@@ -1030,6 +1142,7 @@ class UserModel extends Authenticatable
         $data = array_map(function ($u) use ($rolesMap, $orgMap, $storesMap, $presenceMeta) {
             $uid = (int) ($u->id ?? 0);
             $row = $u->toArray();
+            $row['status_label'] = static::employmentStatusLabel((int) ($row['status'] ?? self::STATUS_ON_JOB));
             $row['roles'] = $rolesMap[$uid] ?? [];
             $row['departments'] = $orgMap[$uid]['departments'] ?? [];
             $row['positions'] = $orgMap[$uid]['positions'] ?? [];
@@ -1170,5 +1283,88 @@ class UserModel extends Authenticatable
             '下班' => 'admin-presence-pill admin-presence-pill--off',
             default => 'admin-presence-pill admin-presence-pill--muted',
         };
+    }
+
+    /**
+     * 物理删除用户及其业务关联数据（在同一事务内执行）。
+     *
+     * @return bool 用户不存在时返回 false
+     */
+    public static function physicalDeleteById(int $userId): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        if (! static::query()->whereKey($userId)->exists()) {
+            return false;
+        }
+
+        DB::transaction(function () use ($userId) {
+            if (Schema::hasTable('expense_forms')) {
+                $formIds = DB::table('expense_forms')->where('user_id', $userId)->pluck('id');
+                if ($formIds->isNotEmpty()) {
+                    $ids = $formIds->map(static fn ($id) => (int) $id)->all();
+                    if (Schema::hasTable('expense_form_values')) {
+                        DB::table('expense_form_values')->whereIn('form_id', $ids)->delete();
+                    }
+                    if (Schema::hasTable('approvals')) {
+                        DB::table('approvals')->whereIn('form_id', $ids)->delete();
+                    }
+                    DB::table('expense_forms')->whereIn('id', $ids)->delete();
+                }
+            }
+
+            if (Schema::hasTable('approvals')) {
+                DB::table('approvals')->where('approver_id', $userId)->delete();
+            }
+
+            if (Schema::hasTable('workflow_nodes')) {
+                DB::table('workflow_nodes')->where('approver_id', $userId)->update(['approver_id' => null]);
+            }
+
+            if (Schema::hasTable('expense_templates')) {
+                DB::table('expense_templates')->where('created_by', $userId)->update(['created_by' => null]);
+            }
+
+            if (Schema::hasTable('departments')) {
+                DB::table('departments')->where('leader_id', $userId)->update(['leader_id' => null]);
+            }
+
+            if (Schema::hasTable('user_roles')) {
+                DB::table('user_roles')->where('user_id', $userId)->delete();
+            }
+            if (Schema::hasTable('user_departments')) {
+                DB::table('user_departments')->where('user_id', $userId)->delete();
+            }
+            if (Schema::hasTable('user_positions')) {
+                DB::table('user_positions')->where('user_id', $userId)->delete();
+            }
+            if (Schema::hasTable('user_stores')) {
+                DB::table('user_stores')->where('user_id', $userId)->delete();
+            }
+            if (Schema::hasTable('user_presence_records')) {
+                DB::table('user_presence_records')->where('user_id', $userId)->delete();
+            }
+
+            if (Schema::hasTable('user_log')) {
+                DB::table('user_log')->where('user_id', $userId)->delete();
+                DB::table('user_log')
+                    ->where('target_type', 'admin_user')
+                    ->where('target_id', $userId)
+                    ->delete();
+            }
+
+            if (Schema::hasTable('personal_access_tokens')) {
+                DB::table('personal_access_tokens')
+                    ->where('tokenable_type', static::class)
+                    ->where('tokenable_id', $userId)
+                    ->delete();
+            }
+
+            static::query()->whereKey($userId)->delete();
+        });
+
+        return true;
     }
 }

@@ -13,7 +13,11 @@ class MenuService extends Controller
 {
     public function apiIndex(): JsonResponse
     {
-        $all = MenuModel::query()->orderBy('sort')->orderBy('id')->get();
+        $all = MenuModel::query()
+            ->orderByDesc('visible')
+            ->orderBy('sort')
+            ->orderBy('id')
+            ->get();
         $roots = $all->filter(function (MenuModel $m) {
             return $m->parent_id === null || (int) $m->parent_id === 0;
         });

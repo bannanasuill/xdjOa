@@ -4,6 +4,7 @@ import Router from 'vue-router';
 import AdminLayout from './views/AdminLayout.vue';
 import AdminHome from './views/AdminHome.vue';
 import AdminUsers from './views/AdminUsers.vue';
+import AdminUserInvites from './views/AdminUserInvites.vue';
 import AdminLogs from './views/AdminLogs.vue';
 import AdminMenus from './views/AdminMenus.vue';
 import AdminPermissions from './views/AdminPermissions.vue';
@@ -29,6 +30,7 @@ const router = new Router({
             children: [
                 { path: '', name: 'admin.home', component: AdminHome },
                 { path: 'users', name: 'admin.users', meta: { perm: 'perm.admin.users' }, component: AdminUsers },
+                { path: 'users/invites', name: 'admin.users.invites', meta: { perm: 'perm.admin.users.invites' }, component: AdminUserInvites },
                 {
                     path: 'departments',
                     name: 'admin.departments',

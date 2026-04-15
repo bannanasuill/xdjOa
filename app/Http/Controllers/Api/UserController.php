@@ -25,7 +25,10 @@ class UserController extends Controller
         }
 
         $today = date('Y-m-d');
-        $places = UserModel::apiClockInPlacesForUserId((int) $user->id, $today);
+        $userId = (int) $user->id;
+        $places = UserModel::apiClockInPlacesForUserId($userId, $today);
+        $status = (int) ($user->status ?? UserModel::STATUS_ON_JOB);
+        $employment = UserModel::apiEmploymentDisplayForUserId($userId, $today);
 
         return $this->ok('success', [
             'id' => (string) $user->id,
@@ -33,6 +36,11 @@ class UserController extends Controller
             'name' => $name,
             'real_name' => trim((string) ($user->real_name ?? '')),
             'phone' => $user->phone !== null && $user->phone !== '' ? (string) $user->phone : null,
+            'status' => $status,
+            'status_label' => UserModel::employmentStatusLabel($status),
+            'department' => $employment['department'],
+            'position' => $employment['position'],
+            'store' => $employment['store'],
             'clock_in_places' => $places,
             'clock_in_places_date' => $today,
         ]);

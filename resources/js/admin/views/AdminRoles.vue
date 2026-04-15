@@ -23,9 +23,12 @@
             <span :title="adminEllipsisTitle(row.name)">{{ adminEllipsisDisplay(row.name) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="角色标识" min-width="140">
+        <el-table-column label="权限" min-width="320" class-name="admin-roles-col-permissions">
           <template slot-scope="{ row }">
-            <span :title="adminEllipsisTitle(row.code)">{{ adminEllipsisDisplay(row.code) }}</span>
+            <span
+              class="admin-role-permissions-preview"
+              :title="rolePermissionsFullText(row)"
+            >{{ rolePermissionsShortText(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="数据范围" width="110" align="center">
@@ -46,8 +49,8 @@
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template slot-scope="{ row }">
-            <template v-if="row.code === 'super_admin'">
-              <span class="admin-role-system-hint" title="系统内置超级管理员：拥有全部权限，不可分配">拥有全部权限</span>
+            <template v-if="row.is_system === 1">
+              <span class="admin-users-op-empty" title="系统内置，不可操作">-</span>
             </template>
             <template v-else>
               <el-button
@@ -269,6 +272,20 @@ export default {
     },
     dataScopeLabel(v) {
       return DATA_SCOPE_LABELS[v] || v || '—';
+    },
+    /** 列表「权限」列：悬停展示完整；单元格最多 50 字 + 省略号 */
+    rolePermissionsFullText(row) {
+      const t = row && row.permissions_text != null ? String(row.permissions_text).trim() : '';
+      return t !== '' ? t : '—';
+    },
+    rolePermissionsShortText(row) {
+      const full = this.rolePermissionsFullText(row);
+      if (full === '—') return '—';
+      const max = 50;
+      if (full.length <= max) {
+        return full;
+      }
+      return `${full.slice(0, max)}...`;
     },
     formatTs(ts) {
       if (ts == null || ts === '') return '—';

@@ -132,6 +132,7 @@ export default {
     },
     pageTitle() {
       if (this.$route.name === 'admin.users') return '用户';
+      if (this.$route.name === 'admin.users.invites') return '邀请列表';
       if (this.$route.name === 'admin.departments') return '部门与职务';
       if (this.$route.name === 'admin.stores') return '店铺管理';
       if (this.$route.name === 'admin.attendance_rules') return '考勤规则';

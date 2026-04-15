@@ -67,5 +67,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'admin.perm' => \App\Http\Middleware\EnsureAdminPermission::class,
         'admin.panel' => \App\Http\Middleware\EnsureCanAccessAdminPanel::class,
+        'sanctum.on_job' => \App\Http\Middleware\EnsureSanctumUserOnJob::class,
     ];
 }

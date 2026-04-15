@@ -8,6 +8,7 @@ use App\Models\PositionModel;
 use App\Models\RoleModel;
 use App\Models\StoreModel;
 use App\Models\SystemSettingModel;
+use App\Models\UserInviteCodeModel;
 use App\Models\UserLogModel;
 use App\Models\UserModel;
 use App\Support\DefaultUserAccount;
@@ -41,6 +42,7 @@ class UserService extends Controller
             ! $actor->canAdminPermission('perm.admin.api.users.index')
             && ! $actor->canAdminPermission('perm.admin.api.users.store')
             && ! $actor->canAdminPermission('perm.admin.api.users.update')
+            && ! $actor->canAdminPermission(UserModel::API_PERMISSION_DESTROY)
         ) {
             return response()->json(['message' => '无权查看角色列表'], 403);
         }
@@ -58,7 +60,10 @@ class UserService extends Controller
             return response()->json(['message' => '未登录'], 401);
         }
 
-        if (! $actor->canAdminPermission('perm.admin.api.users.update')) {
+        if (
+            ! $actor->canAdminPermission('perm.admin.api.users.update')
+            && ! $actor->canAdminPermission('perm.admin.api.users.store')
+        ) {
             return response()->json(['message' => '无权查看组织选项'], 403);
         }
 
@@ -177,7 +182,252 @@ class UserService extends Controller
                 'total' => $paginator->total(),
                 'last_page' => $paginator->lastPage(),
             ],
+            'options' => [
+                'status_options' => UserModel::employmentStatusOptions(),
+            ],
         ]);
+    }
+
+    /** SPA 邀请码列表 JSON。 */
+    public function apiInviteIndex(Request $request): JsonResponse
+    {
+        if (! Schema::hasTable('user_invite_codes')) {
+            return response()->json([
+                'data' => [],
+                'meta' => ['current_page' => 1, 'per_page' => 20, 'total' => 0, 'last_page' => 1],
+            ]);
+        }
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'integer', Rule::in(array_keys(UserModel::employmentStatusOptions()))],
+            'used' => ['nullable', 'integer', 'in:0,1'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50, 100])],
+        ]);
+
+        $q = trim((string) ($validated['q'] ?? ''));
+        $status = isset($validated['status']) ? (int) $validated['status'] : null;
+        $used = isset($validated['used']) ? (int) $validated['used'] : null;
+        $perPage = (int) ($validated['per_page'] ?? 20);
+
+        $builder = DB::table('user_invite_codes as i')
+            ->leftJoin('users as cu', 'cu.id', '=', 'i.created_by')
+            ->leftJoin('users as uu', 'uu.id', '=', 'i.used_user_id')
+            ->leftJoin('departments as d', 'd.id', '=', 'i.dept_id')
+            ->leftJoin('positions as p', 'p.id', '=', 'i.position_id')
+            ->leftJoin('stores as s', 's.id', '=', 'i.store_id');
+
+        if ($q !== '') {
+            $builder->where(function ($w) use ($q) {
+                $w->where('i.code', 'like', '%'.$q.'%')
+                    ->orWhere('cu.account', 'like', '%'.$q.'%')
+                    ->orWhere('cu.real_name', 'like', '%'.$q.'%')
+                    ->orWhere('uu.account', 'like', '%'.$q.'%')
+                    ->orWhere('uu.real_name', 'like', '%'.$q.'%');
+            });
+        }
+        if ($status !== null) {
+            $builder->where('i.register_status', $status);
+        }
+        if ($used !== null) {
+            if ($used === 1) {
+                $builder->whereNotNull('i.used_at');
+            } else {
+                $builder->whereNull('i.used_at');
+            }
+        }
+
+        $paginator = $builder
+            ->orderByDesc('i.id')
+            ->paginate($perPage, [
+                'i.id',
+                'i.code',
+                'i.dept_id',
+                'i.position_id',
+                'i.store_id',
+                'i.register_status',
+                'i.valid_hours',
+                'i.expires_at',
+                'i.used_at',
+                'i.used_user_id',
+                'i.created_by',
+                'i.created_at',
+                'i.updated_at',
+                'cu.account as created_by_account',
+                'cu.real_name as created_by_name',
+                'uu.account as used_user_account',
+                'uu.real_name as used_user_name',
+                'd.name as dept_name',
+                'p.name as position_name',
+                's.name as store_name',
+            ]);
+
+        $rows = collect($paginator->items())->map(
+            static fn ($r) => self::serializeInviteRow($r)
+        )->values()->all();
+
+        return response()->json([
+            'data' => $rows,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+            ],
+            'options' => [
+                'status_options' => UserModel::employmentStatusOptions(),
+                'used_options' => [
+                    ['value' => 1, 'label' => '已使用'],
+                    ['value' => 0, 'label' => '未使用'],
+                ],
+            ],
+        ]);
+    }
+
+    /** 邀请码详情。 */
+    public function apiInviteShow(Request $request, int $inviteId): JsonResponse
+    {
+        if (! Schema::hasTable('user_invite_codes')) {
+            return response()->json(['message' => '邀请码表不存在'], 404);
+        }
+
+        $row = DB::table('user_invite_codes as i')
+            ->leftJoin('users as cu', 'cu.id', '=', 'i.created_by')
+            ->leftJoin('users as uu', 'uu.id', '=', 'i.used_user_id')
+            ->leftJoin('departments as d', 'd.id', '=', 'i.dept_id')
+            ->leftJoin('positions as p', 'p.id', '=', 'i.position_id')
+            ->leftJoin('stores as s', 's.id', '=', 'i.store_id')
+            ->where('i.id', $inviteId)
+            ->first([
+                'i.id',
+                'i.code',
+                'i.dept_id',
+                'i.position_id',
+                'i.store_id',
+                'i.register_status',
+                'i.valid_hours',
+                'i.expires_at',
+                'i.used_at',
+                'i.used_user_id',
+                'i.created_by',
+                'i.created_at',
+                'i.updated_at',
+                'cu.account as created_by_account',
+                'cu.real_name as created_by_name',
+                'uu.account as used_user_account',
+                'uu.real_name as used_user_name',
+                'd.name as dept_name',
+                'p.name as position_name',
+                's.name as store_name',
+            ]);
+
+        if ($row === null) {
+            return response()->json(['message' => '邀请码不存在'], 404);
+        }
+
+        return response()->json(['data' => self::serializeInviteRow($row)]);
+    }
+
+    /** 邀请码状态更新（仅未使用的邀请码可修改）。 */
+    public function apiInviteUpdateStatus(Request $request, int $inviteId): JsonResponse
+    {
+        if (! Schema::hasTable('user_invite_codes')) {
+            return response()->json(['message' => '邀请码表不存在'], 404);
+        }
+        $validated = $request->validate([
+            'status' => ['required', 'integer', Rule::in(array_keys(UserModel::employmentStatusOptions()))],
+        ], [
+            'status.required' => '请选择状态',
+            'status.in' => '状态不合法',
+        ]);
+
+        $row = DB::table('user_invite_codes')
+            ->where('id', $inviteId)
+            ->first(['id', 'register_status', 'used_at']);
+        if ($row === null) {
+            return response()->json(['message' => '邀请码不存在'], 404);
+        }
+        if ($row->used_at !== null) {
+            return response()->json(['message' => '邀请码已被使用，不可修改状态'], 422);
+        }
+
+        $nextStatus = (int) $validated['status'];
+        if ((int) ($row->register_status ?? UserModel::STATUS_ON_JOB) === $nextStatus) {
+            return response()->json(['ok' => true, 'message' => '状态未变化']);
+        }
+
+        DB::table('user_invite_codes')
+            ->where('id', $inviteId)
+            ->update([
+                'register_status' => $nextStatus,
+                'updated_at' => time(),
+            ]);
+
+        UserLogModel::insertFromRequest(
+            $request,
+            'operation',
+            'user',
+            'update',
+            'admin_user_invite',
+            $inviteId,
+            1,
+            '已更新邀请码状态。',
+            [
+                'id' => $inviteId,
+                'old_status' => (int) ($row->register_status ?? UserModel::STATUS_ON_JOB),
+                'new_status' => $nextStatus,
+            ]
+        );
+
+        return response()->json([
+            'ok' => true,
+            'message' => '状态已更新。',
+            'data' => [
+                'id' => $inviteId,
+                'status' => $nextStatus,
+                'status_label' => UserModel::employmentStatusLabel($nextStatus),
+            ],
+        ]);
+    }
+
+    /**
+     * @param  object  $r
+     * @return array<string, mixed>
+     */
+    private static function serializeInviteRow(object $r): array
+    {
+        $now = time();
+        $status = (int) ($r->register_status ?? UserModel::STATUS_ON_JOB);
+        $expiresAt = $r->expires_at !== null ? (int) $r->expires_at : null;
+        $usedAt = $r->used_at !== null ? (int) $r->used_at : null;
+        $isExpired = $usedAt === null && $expiresAt !== null && $expiresAt < $now;
+
+        return [
+            'id' => (int) ($r->id ?? 0),
+            'code' => (string) ($r->code ?? ''),
+            'dept_id' => $r->dept_id !== null ? (int) $r->dept_id : null,
+            'dept_name' => $r->dept_name ?? null,
+            'position_id' => $r->position_id !== null ? (int) $r->position_id : null,
+            'position_name' => $r->position_name ?? null,
+            'store_id' => $r->store_id !== null ? (int) $r->store_id : null,
+            'store_name' => $r->store_name ?? null,
+            'status' => $status,
+            'status_label' => UserModel::employmentStatusLabel($status),
+            'valid_hours' => (int) ($r->valid_hours ?? 0),
+            'expires_at' => $expiresAt,
+            'used_at' => $usedAt,
+            'is_used' => $usedAt !== null,
+            'is_expired' => $isExpired,
+            'used_user_id' => $r->used_user_id !== null ? (int) $r->used_user_id : null,
+            'used_user_account' => $r->used_user_account ?? null,
+            'used_user_name' => $r->used_user_name ?? null,
+            'created_by' => $r->created_by !== null ? (int) $r->created_by : null,
+            'created_by_account' => $r->created_by_account ?? null,
+            'created_by_name' => $r->created_by_name ?? null,
+            'created_at' => $r->created_at !== null ? (int) $r->created_at : null,
+            'updated_at' => $r->updated_at !== null ? (int) $r->updated_at : null,
+        ];
     }
 
     /**
@@ -297,19 +547,18 @@ class UserService extends Controller
             ->with('success', '新增用户成功。');
     }
 
-    /** SPA POST 创建用户，逻辑与 store 一致（默认无角色 + 失败回滚删除用户）。 */
+    /** SPA POST 生成用户注册邀请码（可一次生成多条）。 */
     public function apiStore(Request $request): JsonResponse
     {
-        self::mergeCreateUserRequest($request);
-        $v = self::createUserValidation();
+        $v = self::createInviteValidation();
         $validated = $request->validate($v['rules'], $v['messages']);
-
-        $createdUser = $this->createUser($request, $validated);
+        $pack = $this->createInviteCodes($request, $validated);
+        $n = (int) ($pack['count'] ?? 1);
 
         return response()->json([
             'ok' => true,
-            'message' => '新增用户成功。',
-            'data' => $createdUser,
+            'message' => $n > 1 ? '已生成 '.$n.' 条邀请码。' : '邀请码已生成。',
+            'data' => $pack,
         ], 201);
     }
 
@@ -353,6 +602,11 @@ class UserService extends Controller
         $validated = $request->validate($rules);
 
         $this->updateProfile($request, $adminUser, $validated);
+
+        if (array_key_exists('role_ids', $validated)) {
+            $roleIds = array_values(array_unique(array_map('intval', $validated['role_ids'])));
+            $this->syncRoles($request, $adminUser->fresh(), $roleIds);
+        }
 
         return response()->json([
             'ok' => true,
@@ -463,7 +717,10 @@ class UserService extends Controller
         if ($actor === null) {
             return response()->json(['message' => '未登录'], 401);
         }
-        if (! $actor->canAdminPermission('perm.admin.api.users.update')) {
+        if (
+            ! $actor->canAdminPermission('perm.admin.api.users.update')
+            && ! $actor->canAdminPermission('perm.admin.api.users.store')
+        ) {
             return response()->json(['message' => '无权查看门店分配选项'], 403);
         }
 
@@ -497,6 +754,57 @@ class UserService extends Controller
             'data' => [
                 'stores' => $stores,
                 'positions' => $positions,
+            ],
+        ]);
+    }
+
+    /**
+     * 邀请码创建表单选项：部门 / 职务 / 店铺（仅需新增用户权限）。
+     */
+    public function apiInviteOptions(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+        if ($actor === null) {
+            return response()->json(['message' => '未登录'], 401);
+        }
+        if (! $actor->canAdminPermission('perm.admin.api.users.store')) {
+            return response()->json(['message' => '无权查看邀请码选项'], 403);
+        }
+
+        $departments = [];
+        if (Schema::hasTable('departments')) {
+            $departments = DepartmentModel::query()
+                ->where('status', 1)
+                ->orderBy('sort')
+                ->orderByDesc('id')
+                ->get(['id', 'name'])
+                ->map(static fn (DepartmentModel $d) => [
+                    'id' => (int) $d->id,
+                    'name' => trim((string) ($d->name ?? '')),
+                ])->values()->all();
+        }
+
+        $positions = self::activePositionOptionsForPicker();
+        $stores = [];
+        if (Schema::hasTable('stores')) {
+            $stores = StoreModel::query()
+                ->where('status', 1)
+                ->orderBy('name')
+                ->orderByDesc('id')
+                ->get(['id', 'code', 'name'])
+                ->map(static fn (StoreModel $s) => [
+                    'id' => (int) $s->id,
+                    'code' => trim((string) ($s->code ?? '')),
+                    'name' => trim((string) ($s->name ?? '')),
+                ])->values()->all();
+        }
+
+        return response()->json([
+            'data' => [
+                'departments' => $departments,
+                'positions' => $positions,
+                'stores' => $stores,
+                'status_options' => UserModel::employmentStatusOptions(),
             ],
         ]);
     }
@@ -693,6 +1001,68 @@ class UserService extends Controller
         ]);
     }
 
+    /** SPA DELETE：物理删除用户及关联数据（须单独授权）。 */
+    public function apiDestroy(Request $request, UserModel $adminUser): JsonResponse
+    {
+        $actor = $request->user();
+        if ($actor === null) {
+            return response()->json(['message' => '未登录'], 401);
+        }
+
+        if (! $actor->canAdminPermission(UserModel::API_PERMISSION_DESTROY)) {
+            return response()->json(['message' => '无权删除用户'], 403);
+        }
+
+        if ((int) $actor->id === (int) $adminUser->id) {
+            return response()->json(['message' => '不能删除当前登录账号'], 422);
+        }
+
+        if ($adminUser->isProtectedSystemAdmin()) {
+            return response()->json(['message' => '受保护账号不可删除'], 403);
+        }
+
+        $uid = (int) $adminUser->id;
+        $snapshot = [
+            'id' => $uid,
+            'account' => $adminUser->account,
+            'real_name' => $adminUser->real_name,
+        ];
+
+        try {
+            if (! UserModel::physicalDeleteById($uid)) {
+                return response()->json(['message' => '用户不存在或已删除'], 404);
+            }
+
+            UserLogModel::insertFromRequest(
+                $request,
+                'operation',
+                'user',
+                'delete',
+                'admin_user',
+                $uid,
+                1,
+                '已物理删除用户：'.(string) ($snapshot['account'] ?? '').' / '.(string) ($snapshot['real_name'] ?? ''),
+                $snapshot
+            );
+        } catch (Throwable $e) {
+            UserLogModel::insertFromRequest(
+                $request,
+                'error',
+                'user',
+                'delete',
+                'admin_user',
+                $uid,
+                0,
+                '删除用户失败：'.$e->getMessage(),
+                $snapshot
+            );
+
+            throw $e;
+        }
+
+        return response()->json(['ok' => true, 'message' => '用户已删除。']);
+    }
+
     // ——— 校验规则与用户业务 ———
 
     /** @return array<string, mixed> */
@@ -773,9 +1143,35 @@ class UserService extends Controller
                     Rule::unique('users', 'phone'),
                 ],
                 'password' => ['nullable', 'string', 'min:6'],
+                'role_ids' => ['sometimes', 'array'],
+                'role_ids.*' => ['integer', 'exists:roles,id'],
             ],
             'messages' => [
                 'account.not_in' => '不能使用保留账号 admin。',
+            ],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     rules: array<string, mixed>,
+     *     messages: array<string, string>,
+     * }
+     */
+    protected static function createInviteValidation(): array
+    {
+        return [
+            'rules' => [
+                'dept_id' => ['required', 'integer', 'min:1', Rule::exists('departments', 'id')->where('status', 1)],
+                'position_id' => ['required', 'integer', 'min:1', Rule::exists('positions', 'id')->where('status', 1)],
+                'store_id' => ['required', 'integer', 'min:1', Rule::exists('stores', 'id')->where('status', 1)],
+                'valid_hours' => ['required', 'integer', 'min:1', 'max:720'],
+                'status' => ['required', 'integer', Rule::in(array_keys(UserModel::employmentStatusOptions()))],
+                'count' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            ],
+            'messages' => [
+                'count.min' => '生成数量至少为 1',
+                'count.max' => '单次最多生成 100 条邀请码',
             ],
         ];
     }
@@ -801,6 +1197,8 @@ class UserService extends Controller
                     Rule::unique('users', 'phone')->ignore($user->id),
                 ],
                 'password' => ['nullable', 'string', 'min:6'],
+                'role_ids' => ['sometimes', 'array'],
+                'role_ids.*' => ['integer', 'exists:roles,id'],
             ],
         ];
     }
@@ -812,7 +1210,7 @@ class UserService extends Controller
     {
         return [
             'rules' => [
-                'status' => ['required', 'integer', 'in:0,1'],
+                'status' => ['required', 'integer', Rule::in(array_keys(UserModel::employmentStatusOptions()))],
                 'status_remark' => ['required', 'string', 'max:500'],
             ],
             'messages' => [
@@ -911,6 +1309,9 @@ class UserService extends Controller
         $validated['password'] = $password;
 
         $roleIds = UserModel::defaultNewUserRoleIds();
+        if (array_key_exists('role_ids', $validated)) {
+            $roleIds = array_values(array_unique(array_map('intval', $validated['role_ids'])));
+        }
         $now = time();
         $requestData = [
             'account' => $validated['account'],
@@ -925,7 +1326,7 @@ class UserService extends Controller
                 'password' => $validated['password'],
                 'real_name' => $validated['real_name'],
                 'phone' => $validated['phone'],
-                'status' => 1,
+                'status' => UserModel::STATUS_ON_JOB,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
@@ -954,6 +1355,115 @@ class UserService extends Controller
             );
             throw $e;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    protected function createInviteCodes(Request $request, array $validated): array
+    {
+        $deptId = (int) $validated['dept_id'];
+        $positionId = (int) $validated['position_id'];
+        $storeId = (int) $validated['store_id'];
+        $validHours = (int) $validated['valid_hours'];
+        $status = (int) $validated['status'];
+        $count = (int) ($validated['count'] ?? 1);
+        $count = min(100, max(1, $count));
+
+        $positionDeptId = (int) (PositionModel::query()->whereKey($positionId)->value('dept_id') ?? 0);
+        if ($positionDeptId <= 0 || $positionDeptId !== $deptId) {
+            throw ValidationException::withMessages([
+                'position_id' => ['所选职务不属于当前部门，请重新选择。'],
+            ]);
+        }
+
+        $now = time();
+        $expiresAt = $now + $validHours * 3600;
+        $createdBy = (int) ($request->user()?->id ?? 0) ?: null;
+        $invites = [];
+        $logRows = [];
+
+        try {
+            DB::transaction(function () use (
+                $count,
+                $deptId,
+                $positionId,
+                $storeId,
+                $status,
+                $validHours,
+                $expiresAt,
+                $now,
+                $createdBy,
+                &$invites,
+                &$logRows
+            ) {
+                for ($i = 0; $i < $count; $i++) {
+                    $code = UserInviteCodeModel::generateUniqueCode(8);
+                    $row = [
+                        'code' => $code,
+                        'dept_id' => $deptId,
+                        'position_id' => $positionId,
+                        'store_id' => $storeId,
+                        'register_status' => $status,
+                        'valid_hours' => $validHours,
+                        'expires_at' => $expiresAt,
+                        'used_at' => null,
+                        'used_user_id' => null,
+                        'created_by' => $createdBy,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                    DB::table('user_invite_codes')->insert($row);
+                    $invites[] = [
+                        'code' => $code,
+                        'expires_at' => $expiresAt,
+                    ];
+                    $logRows[] = $row;
+                }
+            });
+
+            UserLogModel::insertFromRequest(
+                $request,
+                'operation',
+                'user',
+                'create',
+                'admin_user_invite',
+                null,
+                1,
+                $count > 1 ? '已批量生成 '.$count.' 条用户注册邀请码。' : '已生成用户注册邀请码。',
+                ['count' => $count, 'rows' => $logRows]
+            );
+        } catch (Throwable $e) {
+            UserLogModel::insertFromRequest(
+                $request,
+                'error',
+                'user',
+                'create',
+                'admin_user_invite',
+                null,
+                0,
+                '生成用户邀请码失败：'.$e->getMessage(),
+                ['count' => $count, 'dept_id' => $deptId, 'position_id' => $positionId, 'store_id' => $storeId]
+            );
+            throw $e;
+        }
+
+        $first = $invites[0] ?? null;
+
+        return [
+            'count' => $count,
+            'invites' => $invites,
+            /** 兼容单条：首条 code / expires_at */
+            'code' => $first['code'] ?? '',
+            'dept_id' => $deptId,
+            'position_id' => $positionId,
+            'store_id' => $storeId,
+            'valid_hours' => $validHours,
+            'status' => $status,
+            'status_label' => UserModel::employmentStatusLabel($status),
+            'expires_at' => $expiresAt,
+        ];
     }
 
     /**

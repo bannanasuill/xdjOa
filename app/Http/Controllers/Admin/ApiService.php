@@ -9,6 +9,8 @@ use App\Models\UserModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Collection;
 
 class ApiService extends Controller
@@ -54,6 +56,64 @@ class ApiService extends Controller
         return response()->json(['data' => $data]);
     }
 
+    /**
+     * 首页：按用工状态汇总人员数量（须具备用户列表接口权限）。
+     */
+    public function userStatusSummary(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if ($user === null) {
+            return response()->json(['message' => '未登录'], 401);
+        }
+        if (! $user->canAdminPermission('perm.admin.api.users.index')) {
+            return response()->json(['message' => '无权查看'], 403);
+        }
+        if (! Schema::hasTable('users')) {
+            return response()->json(['data' => ['total' => 0, 'by_status' => []]]);
+        }
+
+        $rows = DB::table('users')
+            ->selectRaw('status, COUNT(*) as c')
+            ->groupBy('status')
+            ->get();
+
+        $countByStatus = [];
+        foreach ($rows as $row) {
+            $countByStatus[(int) ($row->status ?? 0)] = (int) ($row->c ?? 0);
+        }
+
+        $options = UserModel::employmentStatusOptions();
+        $byStatus = [];
+        foreach ($options as $code => $label) {
+            $byStatus[] = [
+                'status' => (int) $code,
+                'label' => $label,
+                'count' => $countByStatus[(int) $code] ?? 0,
+            ];
+        }
+
+        $unknown = 0;
+        foreach ($countByStatus as $code => $cnt) {
+            if (! array_key_exists($code, $options)) {
+                $unknown += $cnt;
+            }
+        }
+        if ($unknown > 0) {
+            $byStatus[] = [
+                'status' => -1,
+                'label' => '其他',
+                'count' => $unknown,
+            ];
+        }
+
+        return response()->json([
+            'data' => [
+                'total' => (int) DB::table('users')->count(),
+                'by_status' => $byStatus,
+            ],
+        ]);
+    }
+
     public function logout(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -75,8 +135,9 @@ class ApiService extends Controller
             return response()->json(['data' => []]);
         }
 
+        // 含 visible=0（侧栏「未开启」）的菜单：仍按 permission_code 鉴权，无权限则不出现
         $all = MenuModel::query()
-            ->where('visible', 1)
+            ->orderByDesc('visible')
             ->orderBy('sort')
             ->orderBy('id')
             ->get();
@@ -128,6 +189,7 @@ class ApiService extends Controller
             'name' => $item->name,
             'path' => $item->path,
             'icon' => $item->icon,
+            'visible' => (int) $item->visible,
             'children' => $children,
         ];
     }
