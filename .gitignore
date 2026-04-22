@@ -1,6 +1,5 @@
 /.phpunit.cache
 /node_modules
-/public/build
 /public/hot
 /public/storage
 /storage/*.key
@@ -15,8 +14,8 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
-
-/node_modules
 /storage/logs
 /storage/framework
-/bootstrap/cache
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+# 发布策略：保留 public/build（不忽略），用于 git pull 直接上线
